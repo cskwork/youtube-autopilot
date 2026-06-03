@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>vimax-youtube-autopilot — idea to private YouTube draft, one command</title>
+<meta name="description" content="An unattended pipeline that harvests a trending idea, storyboards it, renders motion clips with Google Flow, removes the watermark, narrates it in Korean, and uploads it as a private YouTube draft." />
+<meta property="og:title" content="vimax-youtube-autopilot" />
+<meta property="og:description" content="Idea to private YouTube draft, with one command." />
+<meta property="og:type" content="website" />
+<style>
+  :root {
+    --bg: #07080d;
+    --bg-soft: #0d0f17;
+    --panel: #11131d;
+    --panel-2: #161927;
+    --line: #232739;
+    --text: #e8eaf2;
+    --muted: #9aa1b8;
+    --faint: #6a7090;
+    --accent: #ff4d6d;
+    --accent-2: #7c5cff;
+    --accent-3: #2dd4bf;
+    --glow: rgba(124, 92, 255, .35);
+    --radius: 16px;
+    --maxw: 1120px;
+    font-synthesis: none;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  code, pre, .mono {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: .22em;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent-3);
+  }
+
+  /* background glow */
+  .bg-fx {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(60% 50% at 78% -8%, rgba(124,92,255,.20), transparent 60%),
+      radial-gradient(50% 40% at 8% 0%, rgba(255,77,109,.16), transparent 55%),
+      radial-gradient(40% 50% at 50% 110%, rgba(45,212,191,.10), transparent 60%);
+  }
+
+  /* nav */
+  nav {
+    position: sticky; top: 0; z-index: 40;
+    backdrop-filter: blur(12px);
+    background: rgba(7,8,13,.66);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .row { display: flex; align-items: center; gap: 20px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -.01em; }
+  .brand .dot {
+    width: 22px; height: 22px; border-radius: 7px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    box-shadow: 0 0 18px var(--glow);
+  }
+  .nav-links { margin-left: auto; display: flex; gap: 26px; align-items: center; }
+  .nav-links a { color: var(--muted); font-size: 14px; font-weight: 500; }
+  .nav-links a:hover { color: var(--text); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 18px; border-radius: 10px; font-weight: 600; font-size: 14px;
+    border: 1px solid var(--line); color: var(--text);
+    transition: transform .15s ease, border-color .2s ease, background .2s ease;
+  }
+  .btn:hover { transform: translateY(-1px); border-color: #3a4060; }
+  .btn-primary {
+    border: none; color: #fff;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    box-shadow: 0 8px 28px -8px var(--glow);
+  }
+  .btn-primary:hover { box-shadow: 0 12px 34px -8px var(--glow); }
+
+  /* hero */
+  header.hero { padding: 92px 0 64px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 500;
+    color: var(--muted); border: 1px solid var(--line); background: var(--panel);
+  }
+  .badge .pulse {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--accent-3);
+    box-shadow: 0 0 0 0 rgba(45,212,191,.6); animation: pulse 2.2s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(45,212,191,.5); }
+    70% { box-shadow: 0 0 0 9px rgba(45,212,191,0); }
+    100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); }
+  }
+  h1 {
+    font-size: clamp(40px, 7vw, 76px);
+    line-height: 1.02; letter-spacing: -.03em; font-weight: 800;
+    margin: 22px 0 0;
+  }
+  h1 .grad {
+    background: linear-gradient(120deg, var(--accent) 0%, var(--accent-2) 55%, var(--accent-3) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .lede { font-size: clamp(17px, 2vw, 21px); color: var(--muted); max-width: 680px; margin: 24px 0 0; }
+  .cta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 36px; margin-top: 52px; }
+  .stat .n { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
+  .stat .l { font-size: 13px; color: var(--faint); text-transform: uppercase; letter-spacing: .12em; }
+
+  /* command card */
+  .cmd {
+    margin-top: 48px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    overflow: hidden; box-shadow: 0 30px 80px -40px rgba(0,0,0,.9);
+  }
+  .cmd .bar { display: flex; align-items: center; gap: 8px; padding: 13px 16px; border-bottom: 1px solid var(--line); }
+  .cmd .bar .d { width: 12px; height: 12px; border-radius: 50%; background: #2a2f44; }
+  .cmd .bar .t { margin-left: 8px; font-size: 12px; color: var(--faint); }
+  .cmd pre { margin: 0; padding: 22px 22px 26px; overflow-x: auto; font-size: 13.5px; line-height: 1.85; }
+  .tok-cmt { color: var(--faint); }
+  .tok-cmd { color: var(--accent-3); }
+  .tok-flag { color: var(--accent-2); }
+  .tok-str { color: #ffb3c1; }
+  .tok-out { color: var(--muted); }
+
+  /* sections */
+  section { padding: 78px 0; border-top: 1px solid var(--line); }
+  .sec-head { max-width: 640px; }
+  .sec-head h2 { font-size: clamp(28px, 4vw, 40px); letter-spacing: -.02em; margin: 12px 0 0; font-weight: 800; }
+  .sec-head p { color: var(--muted); font-size: 17px; margin: 14px 0 0; }
+
+  /* pipeline */
+  .pipe { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-top: 46px; }
+  .step {
+    position: relative; border: 1px solid var(--line); border-radius: 14px; padding: 18px 14px;
+    background: var(--panel); transition: transform .18s ease, border-color .2s ease, background .2s ease;
+  }
+  .step:hover { transform: translateY(-4px); border-color: #39406080; background: var(--panel-2); }
+  .step .num {
+    font-size: 12px; font-weight: 700; color: var(--bg);
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px;
+  }
+  .step h4 { margin: 14px 0 6px; font-size: 15px; letter-spacing: -.01em; }
+  .step p { margin: 0; font-size: 12.5px; color: var(--faint); line-height: 1.5; }
+  .pipe-arrows { display: flex; align-items: center; gap: 6px; margin-top: 16px; color: var(--faint); font-size: 13px; flex-wrap: wrap; }
+  .pipe-arrows b { color: var(--accent-3); font-weight: 600; }
+
+  /* features */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 46px; }
+  .card {
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 26px;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    transition: transform .18s ease, border-color .2s ease;
+  }
+  .card:hover { transform: translateY(-4px); border-color: #39406080; }
+  .card .ic {
+    width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
+    border: 1px solid var(--line); margin-bottom: 16px; color: var(--accent-2);
+    background: radial-gradient(120% 120% at 30% 20%, rgba(124,92,255,.16), transparent);
+  }
+  .card h3 { margin: 0 0 8px; font-size: 18px; letter-spacing: -.01em; }
+  .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+  .card .tag { display: inline-block; margin-top: 14px; font-size: 12px; color: var(--accent-3); }
+
+  /* highlight callout */
+  .callout {
+    display: grid; grid-template-columns: 1.4fr 1fr; gap: 32px; align-items: center;
+    border: 1px solid var(--line); border-radius: 22px; padding: 40px;
+    background:
+      radial-gradient(80% 120% at 100% 0%, rgba(255,77,109,.12), transparent 60%),
+      linear-gradient(180deg, var(--panel-2), var(--panel));
+  }
+  .callout h2 { font-size: clamp(26px, 3.5vw, 36px); letter-spacing: -.02em; margin: 8px 0 14px; }
+  .callout p { color: var(--muted); font-size: 16px; margin: 0; }
+  .gate { display: flex; flex-direction: column; gap: 10px; }
+  .gate .g {
+    display: flex; align-items: center; gap: 12px; padding: 13px 16px;
+    border: 1px solid var(--line); border-radius: 12px; background: var(--bg-soft); font-size: 14px;
+  }
+  .gate .g .ok { color: var(--accent-3); font-weight: 700; }
+  .gate .g.human { border-color: #4a2233; background: rgba(255,77,109,.08); }
+  .gate .g.human .ok { color: var(--accent); }
+
+  /* fallbacks list */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 40px; }
+  .fb { border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; background: var(--panel); }
+  .fb h3 { margin: 0 0 10px; font-size: 17px; }
+  .fb p { margin: 0; color: var(--muted); font-size: 14.5px; }
+  .fb .when { display: block; font-size: 12px; color: var(--accent-2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: .1em; }
+
+  /* req list */
+  .reqs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 28px; margin-top: 40px; list-style: none; padding: 0; }
+  .reqs li { display: flex; gap: 12px; padding: 6px 0; color: var(--muted); font-size: 15px; border-bottom: 1px solid var(--line); }
+  .reqs li b { color: var(--text); font-weight: 600; }
+  .reqs li .m { color: var(--accent-3); }
+
+  /* footer */
+  footer { padding: 56px 0 72px; border-top: 1px solid var(--line); color: var(--faint); }
+  .foot-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: space-between; }
+  .foot-row a { color: var(--muted); }
+  .foot-row a:hover { color: var(--text); }
+
+  @media (max-width: 880px) {
+    .pipe { grid-template-columns: repeat(2, 1fr); }
+    .grid { grid-template-columns: 1fr; }
+    .two, .reqs { grid-template-columns: 1fr; }
+    .callout { grid-template-columns: 1fr; }
+    .nav-links a:not(.btn) { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-fx" aria-hidden="true"></div>
+
+<nav>
+  <div class="wrap row">
+    <a class="brand" href="#top"><span class="dot"></span> vimax-youtube-autopilot</a>
+    <div class="nav-links">
+      <a href="#pipeline">Pipeline</a>
+      <a href="#features">Features</a>
+      <a href="#start">Quick start</a>
+      <a class="btn btn-primary" href="https://github.com/cskwork/vimax-youtube-autopilot">View on GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <span class="badge"><span class="pulse"></span> Proven end-to-end on a live channel — 2026-06-03</span>
+    <h1>Idea to a private<br/><span class="grad">YouTube draft</span>, in one command.</h1>
+    <p class="lede">
+      An unattended pipeline that harvests a trending idea, storyboards it, renders
+      motion clips with Google Flow, strips the watermark, narrates it in Korean,
+      and uploads it as a private draft. The only human step left is hitting publish.
+    </p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#start">Get started</a>
+      <a class="btn" href="#pipeline">See the pipeline</a>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="n">7</div><div class="l">Composable stages</div></div>
+      <div class="stat"><div class="n">1</div><div class="l">Command to run</div></div>
+      <div class="stat"><div class="n">1</div><div class="l">Human step left</div></div>
+      <div class="stat"><div class="n">0</div><div class="l">Hardcoded secrets</div></div>
+    </div>
+
+    <div class="cmd">
+      <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="t mono">bash</span></div>
+<pre class="mono"><span class="tok-cmt"># One command runs the whole pipeline and stops at the private draft</span>
+<span class="tok-cmd">python3</span> scripts/auto_youtube_pipeline.py \
+  <span class="tok-flag">--topic</span> <span class="tok-str">"초보자를 위한 홈카페 레시피"</span> \
+  <span class="tok-flag">--scenes</span> 6 \
+  <span class="tok-flag">--client-secret</span> /path/to/oauth_client_secret.json
+
+<span class="tok-out">{"ok": true, "manifest": "…/manifest.json",
+ "studio_url": "https://studio.youtube.com/…",
+ "stopped_for": "human-publish"}</span></pre>
+    </div>
+  </div>
+</header>
+
+<section id="pipeline">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">How it works</span>
+      <h2>Seven small CLIs, one chain.</h2>
+      <p>Each stage runs standalone with the same contract — one JSON line on
+        stdout, logs on stderr — or all seven run from the orchestrator.</p>
+    </div>
+
+    <div class="pipe-arrows">
+      <b>Studio inspiration</b> &rarr; codex storyboard &rarr; Google Flow video &rarr; delogo &rarr; Supertonic Korean TTS &rarr; <b>private draft</b>
+    </div>
+
+    <div class="pipe">
+      <div class="step"><div class="num">1</div><h4>Harvest</h4><p>Scrape the Studio inspiration feed, rank ideas with codex. Trending fallback.</p></div>
+      <div class="step"><div class="num">2</div><h4>Storyboard</h4><p>Expand the idea into N scenes and render a PNG per scene.</p></div>
+      <div class="step"><div class="num">3</div><h4>Script</h4><p>Korean narration, Flow prompts, and YouTube metadata as strict JSON.</p></div>
+      <div class="step"><div class="num">4</div><h4>Video</h4><p>One Flow clip per scene, then concat, fit, and mux into one MP4.</p></div>
+      <div class="step"><div class="num">5</div><h4>Delogo</h4><p>ffmpeg wipes the bottom-right Gemini/Flow sparkle watermark.</p></div>
+      <div class="step"><div class="num">6</div><h4>Narration</h4><p>Supertonic Korean TTS synthesizes the voice and muxes it in.</p></div>
+      <div class="step"><div class="num">7</div><h4>Upload</h4><p>Private draft via the Studio browser (no OAuth) or the Data API.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Why it holds up</span>
+      <h2>Built for real channels, not a happy path.</h2>
+      <p>Accounts split, entitlements differ, and DOMs drift. Every stage has a
+        proven fallback and a safe default.</p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="ic mono">{ }</div>
+        <h3>Composable contracts</h3>
+        <p>Every stage prints exactly one <code>{"ok": true, …}</code> line and logs to stderr — pipe it, skip it, or re-run a single stage.</p>
+        <span class="tag mono">--skip-harvest · --skip-video</span>
+      </div>
+      <div class="card">
+        <div class="ic">&#9210;</div>
+        <h3>Dry-run first</h3>
+        <p>Validate the entire chain without spending Flow credits or touching your channel. A placeholder clip stands in for the real render.</p>
+        <span class="tag mono">--dry-run</span>
+      </div>
+      <div class="card">
+        <div class="ic">&#9737;</div>
+        <h3>Flow-free fallback</h3>
+        <p>No Flow access on the channel account? A narrated Ken-Burns slideshow renders from the storyboard stills. No credits, no browser.</p>
+        <span class="tag mono">build_slideshow.py</span>
+      </div>
+      <div class="card">
+        <div class="ic">&#8682;</div>
+        <h3>OAuth-free upload</h3>
+        <p>When the channel and GCP project accounts differ, upload by driving the logged-in Studio browser instead of the Data API.</p>
+        <span class="tag mono">upload_youtube_studio.py</span>
+      </div>
+      <div class="card">
+        <div class="ic">&#9888;</div>
+        <h3>Resilient scraping</h3>
+        <p>Studio's Shadow DOM and virtualized lists are pierced and retried; Flow's drifting DOM is handled, with a trending fallback.</p>
+        <span class="tag mono">render-retry loop</span>
+      </div>
+      <div class="card">
+        <div class="ic">&#128274;</div>
+        <h3>Secrets stay out</h3>
+        <p>OAuth secrets and tokens come only from CLI args and files. Nothing is hardcoded, and the uploader never prints their contents.</p>
+        <span class="tag mono">private by default</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="callout">
+      <div>
+        <span class="eyebrow">The one gate</span>
+        <h2>Unattended, right up to publish.</h2>
+        <p>The pipeline automates everything and then stops. It uploads as a
+          private draft and hands you a Studio URL — you review, then flip it
+          private to public. Nothing is ever auto-published.</p>
+      </div>
+      <div class="gate">
+        <div class="g"><span class="ok">auto</span> Harvest, storyboard, script</div>
+        <div class="g"><span class="ok">auto</span> Render, delogo, narrate</div>
+        <div class="g"><span class="ok">auto</span> Upload as private draft</div>
+        <div class="g human"><span class="ok">you</span> Review &amp; publish</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Fallbacks</span>
+      <h2>Two splits, handled.</h2>
+    </div>
+    <div class="two">
+      <div class="fb">
+        <span class="when mono">when the channel account lacks Flow</span>
+        <h3>Render without Flow</h3>
+        <p><code>build_slideshow.py</code> renders a narrated Ken-Burns video straight from the storyboard stills — no credits, no browser, same downstream chain.</p>
+      </div>
+      <div class="fb">
+        <span class="when mono">when channel ≠ GCP project account</span>
+        <h3>Upload without OAuth</h3>
+        <p><code>upload_youtube_studio.py</code> drives the logged-in Studio browser: set the file, title, description, visibility, and save the private draft.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Quick start</span>
+      <h2>Validate, then run for real.</h2>
+      <p>Prove the whole chain with a dry run before spending a single credit.</p>
+    </div>
+
+    <div class="cmd" style="margin-top:36px">
+      <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="t mono">validate the full chain — no Flow credits, no upload</span></div>
+<pre class="mono"><span class="tok-cmd">python3</span> scripts/auto_youtube_pipeline.py \
+  <span class="tok-flag">--topic</span> <span class="tok-str">"테스트 주제"</span> <span class="tok-flag">--dry-run</span> <span class="tok-flag">--video</span> ./sample.mp4
+
+<span class="tok-cmt"># inspect the run manifest</span>
+<span class="tok-cmd">cat</span> &lt;out-dir&gt;/manifest.json</pre>
+    </div>
+
+    <ul class="reqs">
+      <li><span class="m mono">py</span> <span><b>Python 3.12</b> &nbsp; pip install -r requirements.txt</span></li>
+      <li><span class="m mono">av</span> <span><b>ffmpeg + ffprobe</b> on PATH</span></li>
+      <li><span class="m mono">ai</span> <span><b>codex CLI</b> logged in via ChatGPT (image entitlement)</span></li>
+      <li><span class="m mono">br</span> <span><b>Chrome</b> with remote debugging, Studio + Flow access</span></li>
+      <li><span class="m mono">js</span> <span><b>Node 18.3+</b> for Supertonic TTS &amp; Playwright CLI</span></li>
+      <li><span class="m mono">key</span> <span><b>OAuth client secret</b> JSON (Data API path)</span></li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-row">
+    <div class="brand"><span class="dot"></span> vimax-youtube-autopilot</div>
+    <div>
+      <a href="https://github.com/cskwork/vimax-youtube-autopilot">GitHub</a> &nbsp;·&nbsp;
+      <a href="#pipeline">Pipeline</a> &nbsp;·&nbsp;
+      <a href="#start">Quick start</a>
+    </div>
+  </div>
+  <div class="wrap" style="margin-top:18px; font-size:13px;">
+    Idea to private YouTube draft, with one command. Private project — all rights reserved.
+  </div>
+</footer>
+
+</body>
+</html>
