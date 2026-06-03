@@ -127,7 +127,13 @@ reaches the next stage and never uploads. See `<gates>` below.
    `bgm_library.py` (resolve one track by mood), `audio_mix.py` (pure ffmpeg
    mix graph). Only the KEY sentences (from `script.json` `key_sentences`, else
    a sparse heuristic) are burned in as bottom-centered captions at exact times
-   (forces a libx264 re-encode). BGM resolution order is explicit `--bgm` >
+   (forces a libx264 re-encode). Captions are sized to the REAL video frame and
+   tuned per FORMAT — Shorts/vertical (9:16) get a phone-legible font and a tall
+   bottom margin that clears the Shorts UI; a standard/landscape (16:9) video
+   keeps the proven smaller look. `subtitles._ass_header` sets `PlayResX/Y` to
+   the actual frame (1:1 scaling) and branches on portrait vs landscape, so a
+   fixed-aspect header never balloons or overflows the text. BGM resolution
+   order is explicit `--bgm` >
    mood cache > Jamendo. Real generation is the default: if no REAL source
    resolves, the stage HARD-STOPS unless `--allow-synth-bgm` is passed, which
    permits the synthesized CC0 ambient pad (ffmpeg `lavfi`) fallback; `--no-bgm`
@@ -155,6 +161,33 @@ reaches the next stage and never uploads. See `<gates>` below.
 The pipeline STOPS here. The ONLY remaining human step: open the private draft
 in YouTube Studio and flip it private -> public once reviewed.
 </process>
+
+<product_ad_mode>
+Advertising an EXISTING product (an app, site, or device with a real UI) adds
+exactly one rule to the pipeline: the product's real screens must appear
+FAITHFULLY. Generative video re-renders whatever it is seeded with, so feeding a
+real UI screenshot through Flow garbles its text and layout. So in product-ad
+mode the timeline is HYBRID, and this rule is domain-agnostic — the product,
+its screens, and the script are inputs, never hardcoded:
+
+- Flow renders only B-roll/atmosphere (people, hands, environment, mood). It is
+  NEVER seeded with the product UI itself.
+- Real product screens are captured from the live product (or supplied by the
+  user) and shown VERBATIM as Ken-Burns motion clips via
+  `build_kenburns_clip.py` (sharp pixels, subtle pan, blurred-cover background,
+  fixed WxH/fps). They are never sent to a generative model.
+- Both clip kinds are normalized to ONE geometry and concatenated with
+  `assemble_flow_video.py`; delogo runs per Flow clip only (real screens carry
+  no watermark). Narration/BGM/captions (`add_narration.py`) and upload then
+  proceed unchanged.
+- Capture real screens with the SAME attached browser used for Flow/Studio:
+  navigate the live product, set the target viewport, screenshot; when a screen
+  needs data to render, seed the product's own storage (e.g. localStorage)
+  rather than mocking the UI. Provided assets are equally valid inputs.
+
+Net effect: the audience sees the genuine product UI, while Flow supplies only
+the cinematic surround.
+</product_ad_mode>
 
 <gates>
 `scripts/stage_gates.py` is the teeth behind "each stage must pass". After every
@@ -244,6 +277,9 @@ per-gate `min_duration` / `min_bytes` args.
   narration + mux into one MP4.
 - `scripts/build_slideshow.py` — Flow-free fallback: narrated Ken-Burns video
   from the storyboard stills.
+- `scripts/build_kenburns_clip.py` — product-ad mode: render ONE real product
+  screenshot as a faithful Ken-Burns clip (sharp UI, blurred-cover bg, fixed
+  geometry) so real screens concat with Flow B-roll without being regenerated.
 - `scripts/remove_logo.py` — Stage 5: ffmpeg `delogo` watermark removal.
 - `scripts/add_narration.py` — Stage 6 conductor: per-sentence Supertonic TTS +
   low BGM bed + ducking + selective burned key captions + ffmpeg mux.

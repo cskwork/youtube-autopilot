@@ -133,6 +133,36 @@ def test_ass_has_style_and_only_key_dialogue() -> None:
     assert "둘째 문장." not in ass
 
 
+def _style_font(ass: str) -> int:
+    line = next(l for l in ass.splitlines() if l.startswith("Style: Key,"))
+    return int(line.split(",")[2])  # Name, Fontname, Fontsize, ...
+
+
+def _style_margin_v(ass: str) -> int:
+    line = next(l for l in ass.splitlines() if l.startswith("Style: Key,"))
+    return int(line.split(",")[-2])  # ..., MarginL, MarginR, MarginV, Encoding
+
+
+def test_ass_playres_matches_frame_and_wraps() -> None:
+    segs = _segs()
+    ass = build_ass(segs, [0, 2], width=1080, height=1920)
+    assert "PlayResX: 1080" in ass and "PlayResY: 1920" in ass
+    assert "WrapStyle: 0" in ass  # smart wrap, not the old no-wrap WrapStyle 2
+
+
+def test_shorts_vs_standard_caption_sizing_differs() -> None:
+    segs = _segs()
+    shorts = build_ass(segs, [0], width=1080, height=1920)   # 9:16
+    standard = build_ass(segs, [0], width=1280, height=720)  # 16:9
+    # Standard reproduces the historical 16:9 look (font 44, PlayRes 1280x720).
+    assert "PlayResX: 1280" in standard
+    assert _style_font(standard) == 44
+    # Shorts uses a larger, phone-legible font and a taller bottom margin so the
+    # captions clear the Shorts UI.
+    assert _style_font(shorts) > _style_font(standard)
+    assert _style_margin_v(shorts) > _style_margin_v(standard)
+
+
 def test_burn_vf_escapes_path() -> None:
     vf = burn_vf("/tmp/some dir/captions.ass")
     assert vf.startswith("ass=")

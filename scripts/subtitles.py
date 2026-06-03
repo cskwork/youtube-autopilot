@@ -131,23 +131,50 @@ def _ass_ts(seconds: float) -> str:
     return f"{h:d}:{m:02d}:{s:02d}.{cs:02d}"
 
 
-_ASS_HEADER = (
-    "[Script Info]\n"
-    "ScriptType: v4.00+\n"
-    "PlayResX: 1280\n"
-    "PlayResY: 720\n"
-    "WrapStyle: 2\n\n"
-    "[V4+ Styles]\n"
-    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
-    "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, "
-    "ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
-    "MarginL, MarginR, MarginV, Encoding\n"
-    # White text, semi-transparent box (BorderStyle 3), bottom-centered (Alignment 2).
-    "Style: Key,Arial,44,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,"
-    "100,100,0,0,3,2,0,2,80,80,60,1\n\n"
-    "[Events]\n"
-    "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-)
+def _ass_header(width: int, height: int) -> str:
+    """Build an ASS header sized to the ACTUAL video resolution, and tuned
+    DIFFERENTLY for Shorts (9:16 vertical) vs a standard (16:9 landscape) video.
+
+    libass scales the whole script by PlayResX/Y -> frame size. A FIXED
+    1280x720 header on a 1080x1920 frame scales the Y axis ~2.67x, ballooning
+    the font and pushing every un-wrapped line off both edges. So PlayRes always
+    matches the real frame (1:1 scaling) and WrapStyle 0 wraps long Korean lines
+    within the side margins. Then the two FORMATS diverge:
+
+    - Shorts / vertical (height > width): viewed on a phone and the bottom ~15%
+      is covered by the Shorts UI (like/share/caption/handle). Use a larger
+      font (relative to width) and a tall bottom margin so captions sit ABOVE
+      that UI.
+    - Standard / landscape: the proven 16:9 look (font ~ width*0.034, modest
+      bottom margin) — 1280x720 reproduces the original 44px / MarginV 60.
+    """
+    portrait = height > width
+    if portrait:                               # Shorts (9:16)
+        font = max(28, round(width * 0.050))
+        margin_lr = round(width * 0.06)
+        margin_v = round(height * 0.13)        # clear the Shorts bottom UI
+    else:                                      # standard video (16:9)
+        font = max(20, round(width * 0.034))
+        margin_lr = round(width * 0.0625)
+        margin_v = round(height * 0.085)
+    outline = max(2, round(font * 0.10))
+    return (
+        "[Script Info]\n"
+        "ScriptType: v4.00+\n"
+        f"PlayResX: {width}\n"
+        f"PlayResY: {height}\n"
+        "WrapStyle: 0\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+        "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, "
+        "ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
+        "MarginL, MarginR, MarginV, Encoding\n"
+        # White text, semi-transparent box (BorderStyle 3), bottom-centered (Alignment 2).
+        f"Style: Key,Arial,{font},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,"
+        f"-1,0,0,0,100,100,0,0,3,{outline},0,2,{margin_lr},{margin_lr},{margin_v},1\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    )
 
 
 def _ass_escape(text: str) -> str:
@@ -155,9 +182,14 @@ def _ass_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
 
 
-def build_ass(segments: list[Segment], key_idx: list[int]) -> str:
-    """Render a styled ASS subtitle file for the key indices only."""
-    lines = [_ASS_HEADER]
+def build_ass(segments: list[Segment], key_idx: list[int],
+              width: int = 1280, height: int = 720) -> str:
+    """Render a styled ASS subtitle file for the key indices only.
+
+    Pass the real video width/height so the captions are sized to the frame
+    (9:16 Shorts or 16:9). Defaults keep the historical 16:9 behavior.
+    """
+    lines = [_ass_header(width, height)]
     for idx in key_idx:
         seg = segments[idx]
         lines.append(
