@@ -510,8 +510,10 @@ def run_pipeline(args: argparse.Namespace, paths: dict[str, Path]) -> dict:
 
     stage_header(6, total, "add_narration")
     narration = stage_narration(args, paths["delogo_video"], script, paths)
-    final_video = Path(narration["out"]).resolve()
-    gate("add_narration", lambda: stage_gates.gate_narration(final_video))
+    # Gate the known output path (not narration["out"]) so a malformed stage
+    # result still yields a clean GATE FAILED rather than a KeyError.
+    gate("add_narration", lambda: stage_gates.gate_narration(paths["narrated_video"]))
+    final_video = paths["narrated_video"].resolve()
 
     stage_header(7, total, "upload_youtube")
     upload = stage_upload(args, final_video, script, _bgm_attribution(narration))
