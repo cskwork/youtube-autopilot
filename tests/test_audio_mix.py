@@ -76,9 +76,24 @@ def test_ducking_on_inserts_sidechaincompress() -> None:
     assert "release=300" in fc
 
 
+def test_ducking_on_splits_narration_pad_explicitly() -> None:
+    g = _graph(duck=True)
+    fc = g.filter_complex
+    # narration pad is split explicitly (no implicit input-pad auto-split)
+    assert "[0:a]asplit=2[nar0][nar1]" in fc
+    # one copy keys the sidechain compressor, the other feeds the final amix
+    assert "[nar0]sidechaincompress=" in fc
+    assert "[nar1]" in fc
+    assert "[nar1][bgd]amix=inputs=2:duration=first:normalize=0[mix]" in fc
+
+
 def test_ducking_off_omits_sidechaincompress() -> None:
     g = _graph(duck=False)
-    assert "sidechaincompress" not in g.filter_complex
+    fc = g.filter_complex
+    assert "sidechaincompress" not in fc
+    # non-duck path keeps the plain narration pad, no asplit
+    assert "asplit" not in fc
+    assert "[0:a]" in fc
 
 
 def test_map_label_is_final_output() -> None:

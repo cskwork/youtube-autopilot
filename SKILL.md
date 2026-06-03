@@ -135,8 +135,10 @@ in YouTube Studio and flip it private -> public once reviewed.
   NO pip deps — they use only the Python stdlib (urllib) plus ffmpeg.
 - `ffmpeg` and `ffprobe` on PATH (delogo, mux, duration, dry-run placeholder).
   Stage 6 additionally needs ffmpeg built with **libass** (the `ass`/`subtitles`
-  filter, for burned captions) and the `sidechaincompress`, `aloop`, `afade`,
-  and `amix` filters (BGM bed + ducking) — all present in stock ffmpeg 7.x.
+  filter, for burned captions) and the `sidechaincompress`, `afade`, and
+  `amix` filters plus the `-stream_loop -1` input flag (the BGM bed loops via
+  `-stream_loop -1` and is trimmed by `amix duration=first`, not `aloop`) —
+  all present in stock ffmpeg 7.x.
 - Optional `JAMENDO_CLIENT_ID` env var enables fresh per-run royalty-free BGM
   from Jamendo (CC-BY/CC-BY-SA/CC0 only). Absent/offline -> a synthesized CC0
   ambient pad guarantees BGM. Never hardcode the key; it is read from the env.

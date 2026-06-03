@@ -70,10 +70,16 @@ def build_mix_graph(
     inputs = ["narration", "bgm"] + (["original"] if keep_original else [])
     bed_label = "[bed]" if keep_original else "[bg]"
     parts = [_bed_chain(bgm_volume, narration_dur, fade, keep_original)]
+    narration_pad = "[0:a]"
     if duck:
-        parts.append(f"{bed_label}[0:a]sidechaincompress={DUCK_PARAMS}[bgd]")
+        # Split the narration pad explicitly: one copy keys the sidechain
+        # compressor, the other feeds the final amix. Avoids relying on
+        # ffmpeg's implicit input-pad auto-split (portability).
+        parts.append("[0:a]asplit=2[nar0][nar1]")
+        parts.append(f"{bed_label}[nar0]sidechaincompress={DUCK_PARAMS}[bgd]")
         bed_label = "[bgd]"
-    parts.append(f"[0:a]{bed_label}amix=inputs=2:duration=first:normalize=0[mix]")
+        narration_pad = "[nar1]"
+    parts.append(f"{narration_pad}{bed_label}amix=inputs=2:duration=first:normalize=0[mix]")
     return MixGraph(
         inputs=inputs,
         bgm_input_args=["-stream_loop", "-1"],

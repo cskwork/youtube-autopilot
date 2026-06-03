@@ -16,7 +16,6 @@ import argparse
 import importlib.util
 import json
 import shlex
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -283,11 +282,11 @@ def conduct(args: argparse.Namespace, src: Path, out: Path) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="add_narration_") as tmp:
         work = Path(tmp)
-        segments, key_idx, captions, burn_ass = None, None, None, None
+        captions, burn_ass = None, None
         if args.subtitles_on:
             narration, segments, key_idx = synth_with_captions(args, text, fields["key_sentences"], work)
             captions = write_captions(segments, key_idx, out.parent)
-            burn_ass = captions["ass"]
+            burn_ass = str(captions["ass"])
         else:
             narration = synth_whole(args, text, work)
         bgm = None
@@ -301,6 +300,7 @@ def conduct(args: argparse.Namespace, src: Path, out: Path) -> int:
     emit({
         "ok": True, "out": str(out_path), "tts": True, "voice": args.voice,
         "voice_name": VOICE_NAMES.get(args.voice, args.voice),
+        "wav": str(narration),
         "bgm": _bgm_payload(bgm), "subtitles": captions, "credits": credits,
     })
     return 0

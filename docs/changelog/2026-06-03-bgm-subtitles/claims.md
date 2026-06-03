@@ -191,7 +191,7 @@ offline Stage 6 integration produces an MP4 with an audio stream + burned
 captions + synth BGM.
 
 **Implements:**
-- `tests/` (57 tests) + `tests/test_add_narration_integration.py` (real ffmpeg, offline)
+- `tests/` (68 tests) + `tests/test_add_narration_integration.py` (real ffmpeg, offline)
 
 **run-to-prove:**
 ```bash
@@ -199,5 +199,52 @@ for f in scripts/*.py; do python3 "$f" --help >/dev/null || echo "FAIL $f"; done
 python3 -m pytest tests/ -q
 ```
 (Expect: no FAIL lines; all tests pass.)
+
+**Verdict:** PENDING
+
+---
+
+## Review-fix cycle 1
+
+Three expert reviews (architect / security / code-reviewer) APPROVED; this cycle
+applies their convergent MEDIUM + cheap LOW findings and adds two missing tests.
+Test count rose 57 -> 68.
+
+- **F1 — manifest `wav` parity.** `scripts/add_narration.py:303` now emits
+  `"wav": str(narration)` (the concatenated narration WAV used in the mux), so
+  `scripts/auto_youtube_pipeline.py:340` `narration.get("wav")` no longer records
+  `null`. Covered by `tests/test_add_narration_integration.py::test_legacy_script_without_bgm_or_keys`
+  (asserts `result["wav"]` ends with `narration.wav`).
+- **F2 — explicit duck filter graph.** `scripts/audio_mix.py:78-82` now emits
+  `[0:a]asplit=2[nar0][nar1]`, keys the sidechain with `[nar0]` and feeds the
+  final amix with `[nar1]` — no implicit input-pad auto-split. Non-duck path
+  unchanged. Covered by `tests/test_audio_mix.py::test_ducking_on_splits_narration_pad_explicitly`
+  and `::test_ducking_off_omits_sidechaincompress`.
+- **F3 — bounded Jamendo download.** `scripts/bgm_library.py:153-178`
+  `_bounded_download` requires https + `*.jamendo.com`, sets a 15s timeout +
+  User-Agent, checks `Content-Type` is audio/octet-stream, and caps at
+  `_MAX_BGM_BYTES` (30 MB, line 36); any raise stays inside the synth-fallback
+  try/except. Covered by `tests/test_bgm_library.py::test_download_refuses_non_jamendo_host_falls_through`.
+- **F4 — cache provenance sidecar.** `scripts/bgm_library.py:91-107`
+  `_write_sidecar` persists `{source, license, attribution}` next to the cached
+  MP3; `_read_sidecar` (line 79) + `_cache_hit` (line 74) report the REAL
+  license/attribution on a cache hit, falling back to the generic label when the
+  sidecar is missing. Covered by `tests/test_bgm_library.py::test_cache_sidecar_roundtrip`
+  and `::test_cache_hit_without_sidecar_uses_generic_label`.
+- **F5 — lint cleanups.** Removed unused `import shutil` from
+  `scripts/add_narration.py`; `burn_ass = str(captions["ass"])` (line 289) so the
+  type is `str | None`; trimmed the dead `segments, key_idx` tuple init to
+  `captions, burn_ass = None, None` (line 285). Removed unused `import pytest`
+  from `tests/test_bgm_library.py`.
+- **F6 — two missing tests.**
+  `tests/test_add_narration_integration.py::test_legacy_script_without_bgm_or_keys`
+  (OLD-style script with only `narration_ko` + `youtube`; asserts h264+aac MP4,
+  heuristic captions, derived mood — exercises the `resolve_mood` derivation
+  branch and locks AC#6). New `tests/test_write_script.py` unit-tests
+  `write_script.validate()` (passes on a full valid result; raises SystemExit
+  when `bgm_mood` missing/empty or `key_sentences` missing/not-a-list).
+- **F7 — doc accuracy.** `SKILL.md:139-141` corrects the BGM-bed loop wording
+  from `aloop` to the actual mechanism: `-stream_loop -1` input flag trimmed by
+  `amix duration=first`.
 
 **Verdict:** PENDING
