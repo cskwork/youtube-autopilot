@@ -23,6 +23,11 @@ page => (async () => {
     await page.keyboard.press('Meta+A');
     await page.keyboard.press('Control+A');
     await page.keyboard.press('Backspace');
+    // The title box auto-fills from the FILENAME; a plain select-all can miss it
+    // and leave the default behind (so a 'narrated.mp4' upload became
+    // '<title>narrated'). Verify empty, and triple-click to hard-select if not.
+    let cur = (await el.textContent() || '').trim();
+    if (cur.length) { await el.click({ clickCount: 3 }); await page.keyboard.press('Backspace'); }
     await page.keyboard.insertText(text);
     return true;
   };
