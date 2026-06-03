@@ -76,10 +76,14 @@ def mean_volume_db(path: Path) -> float:
            "-map", "0:a:0?", "-af", "volumedetect", "-f", "null", "-"]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     match = _MEAN_VOLUME_RE.search(proc.stderr or "")
-    if not match:
-        return float("-inf")
-    value = match.group(1)
-    return float("-inf") if "inf" in value else float(value)
+    if match:
+        value = match.group(1)
+        return float("-inf") if "inf" in value else float(value)
+    # No reading and ffmpeg errored: a decode/container failure, NOT silence.
+    # Surface it as such instead of misdiagnosing it as a TTS-silent failure.
+    if proc.returncode != 0:
+        raise GateError(f"volumedetect failed for {path} (rc={proc.returncode}); audio may be corrupt")
+    return float("-inf")
 
 
 # --- media artifact gates ----------------------------------------------------
@@ -100,6 +104,11 @@ def gate_video(path: Path, *, label: str = "video",
     if not has_video_stream(path):
         raise GateError(f"{label}: no video stream in {path}")
     dur = probe_duration(path)
+    if dur <= 0.0:
+        raise GateError(
+            f"{label}: could not read a valid duration for {path} ({dur:.3f}s); "
+            "file may be truncated or corrupt"
+        )
     if dur < min_duration:
         raise GateError(
             f"{label}: duration {dur:.3f}s below minimum {min_duration:.3f}s ({path})"
