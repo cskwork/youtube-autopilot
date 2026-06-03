@@ -134,6 +134,7 @@ def _jamendo_query(client_id: str, mood: str, limit: int) -> str:
         "fuzzytags": mood,
         "include": "licenses musicinfo",
         "audioformat": "mp32",
+        "audiodownload_allowed": "true",
         "order": "popularity_total",
     }
     return JAMENDO_API + "?" + urllib.parse.urlencode(params)
@@ -155,12 +156,33 @@ def _fetch_jamendo(client_id: str, mood: str, slug: str, cache_dir: Path) -> Bgm
     return None
 
 
-def _bounded_download(url: str, dest: Path) -> None:
-    """Fetch an MP3 with host/scheme/content-type checks and a hard size cap.
+def _is_audio_file(path: Path) -> bool:
+    """True if ffprobe finds a decodable audio stream in the written file.
 
-    Only https jamendo.com hosts are allowed; the response must look like audio
-    and stay under ``_MAX_BGM_BYTES``. Any violation raises so the caller's
-    try/except degrades to the synth pad instead of hanging or trusting junk.
+    Content-based check: Jamendo's storage mislabels real MP3s as text/html,
+    so the header is unreliable. ffprobe is authoritative. Returns False on any
+    ffprobe error so a junk/HTML payload degrades to the synth pad.
+    """
+    try:
+        proc = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "a:0",
+             "-show_entries", "stream=codec_type", "-of", "default=nw=1:nk=1",
+             str(path)],
+            capture_output=True, text=True, check=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return False
+    return proc.stdout.strip() == "audio"
+
+
+def _bounded_download(url: str, dest: Path) -> None:
+    """Fetch an MP3 with host/scheme checks, a size cap, and ffprobe validation.
+
+    Only https jamendo.com hosts are allowed and the payload must stay under
+    ``_MAX_BGM_BYTES``. Content-Type is logged but NOT gated (Jamendo mislabels
+    audio as text/html); instead the written file must decode as audio per
+    ``_is_audio_file``. Any violation raises so the caller's try/except degrades
+    to the synth pad instead of hanging or trusting junk.
     """
     parsed = urllib.parse.urlparse(url)
     host = (parsed.hostname or "").lower()
@@ -169,12 +191,14 @@ def _bounded_download(url: str, dest: Path) -> None:
     req = urllib.request.Request(url, headers={"User-Agent": "vimax-bgm/1"})
     with urllib.request.urlopen(req, timeout=15) as resp:
         ctype = (resp.headers.get("Content-Type") or "").lower()
-        if "audio" not in ctype and "octet-stream" not in ctype:
-            raise ValueError(f"unexpected BGM content-type: {ctype!r}")
+        log(f"[bgm] downloading track (advisory content-type={ctype!r})")
         data = resp.read(_MAX_BGM_BYTES + 1)
     if len(data) > _MAX_BGM_BYTES:
         raise ValueError(f"BGM download exceeds {_MAX_BGM_BYTES} bytes")
     dest.write_bytes(data)
+    if not _is_audio_file(dest):
+        dest.unlink(missing_ok=True)
+        raise ValueError(f"BGM download is not decodable audio: {url}")
 
 
 def _download_track(track: dict, download: str, slug: str, cache_dir: Path) -> BgmResult:
