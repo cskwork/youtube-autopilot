@@ -163,6 +163,26 @@ def test_shorts_vs_standard_caption_sizing_differs() -> None:
     assert _style_margin_v(shorts) > _style_margin_v(standard)
 
 
+def test_variety_captions_styling() -> None:
+    segs = _segs()
+    ass = build_ass(segs, [0, 1], width=1080, height=1920, emphasis=["문장"])
+    # per-line fade-in + alignment cycling (bottom \an2 then top \an8)
+    assert "\\fad(" in ass
+    assert "\\an2" in ass and "\\an8" in ass
+    # emphasis: bold + a scale pop on the matched token
+    assert "\\b1" in ass
+    assert "\\t(0,140" in ass
+    # the words themselves still render
+    assert "문장" in ass
+
+
+def test_variety_emphasis_falls_back_to_longest_token() -> None:
+    segs = _segs()
+    # no emphasis terms -> each caption still pops its longest token (bold tag)
+    ass = build_ass(segs, [0], width=1080, height=1920, emphasis=None)
+    assert "\\b1" in ass
+
+
 def test_burn_vf_escapes_path() -> None:
     vf = burn_vf("/tmp/some dir/captions.ass")
     assert vf.startswith("ass=")

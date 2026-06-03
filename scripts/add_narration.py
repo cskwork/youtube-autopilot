@@ -204,17 +204,36 @@ def synth_with_captions(args: argparse.Namespace, text: str, keys, work_dir: Pat
     return narration, segments, key_idx
 
 
+def emphasis_terms(fields: dict) -> list[str] | None:
+    """Build variety-caption emphasis terms from the script's youtube tags:
+    split each tag into alnum tokens (>=2 chars) so key nouns (e.g. 발음,
+    피드백) pop inside captions. Domain-agnostic; returns None when unavailable
+    (then each caption just pops its longest token)."""
+    youtube = fields.get("youtube") if isinstance(fields.get("youtube"), dict) else {}
+    tags = youtube.get("tags") if isinstance(youtube, dict) else None
+    terms: list[str] = []
+    for tag in tags or []:
+        for tok in str(tag).split():
+            core = "".join(ch for ch in tok if ch.isalnum())
+            if len(core) >= 2 and core not in terms:
+                terms.append(core)
+    return terms or None
+
+
 def write_captions(segments, key_idx, out_dir: Path,
-                   width: int = 1280, height: int = 720) -> dict[str, object]:
+                   width: int = 1280, height: int = 720,
+                   emphasis: list[str] | None = None) -> dict[str, object]:
     """Persist .srt + .ass sidecars beside the output; return their paths.
 
     ``width``/``height`` are the real video frame size so captions size to the
-    format (9:16 Shorts vs 16:9 standard); see ``subtitles._ass_header``.
+    format (9:16 Shorts vs 16:9 standard); ``emphasis`` highlights key terms
+    variety-show style. See ``subtitles.build_ass`` / ``_ass_header``.
     """
     srt = out_dir / "captions.srt"
     ass = out_dir / "captions.ass"
     srt.write_text(subtitles.build_srt(segments, key_idx), encoding="utf-8")
-    ass.write_text(subtitles.build_ass(segments, key_idx, width, height), encoding="utf-8")
+    ass.write_text(subtitles.build_ass(segments, key_idx, width, height, emphasis),
+                   encoding="utf-8")
     return {"srt": str(srt), "ass": str(ass), "key_count": len(key_idx)}
 
 
@@ -319,7 +338,8 @@ def conduct(args: argparse.Namespace, src: Path, out: Path) -> int:
             narration, segments, key_idx = synth_with_captions(args, text, fields["key_sentences"], work)
             vw = int(_probe(src, "stream=width", "v:0") or 1280)
             vh = int(_probe(src, "stream=height", "v:0") or 720)
-            captions = write_captions(segments, key_idx, out.parent, vw, vh)
+            captions = write_captions(segments, key_idx, out.parent, vw, vh,
+                                      emphasis_terms(fields))
             burn_ass = str(captions["ass"])
         else:
             narration = synth_whole(args, text, work)
