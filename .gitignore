@@ -9,6 +9,7 @@ __pycache__/
 
 # Generated run artifacts (videos, narration, ideas, storyboards)
 .working_dir/
+runs/
 *.mp4
 *.wav
 

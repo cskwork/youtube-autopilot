@@ -244,21 +244,37 @@ def build_audio_track(args: argparse.Namespace, narration_wav: Path, src: Path,
 
 # --- final mux ---------------------------------------------------------------
 
-def _video_codec_args(src: Path, burn_ass: str | None) -> list[str]:
-    """Burning subtitles forces a re-encode; otherwise copy H.264 if possible."""
+def _video_filters(src: Path, audio: Path, burn_ass: str | None) -> list[str]:
+    """Build the -vf chain so the FULL narration always plays.
+
+    The narration track is often LONGER than the source clip (an ~8s Flow clip vs
+    a ~15s voiceover). Plain ``-shortest`` would truncate the muxed output to the
+    clip and cut the narration off mid-sentence. We freeze-pad the video (``tpad``
+    clones the last frame) up to the narration length so nothing is cut; with the
+    video now >= the audio, ``-shortest`` lands the output exactly at the narration
+    end. ``tpad`` MUST precede the caption burn so cues over the held tail render.
+    """
+    filters: list[str] = []
+    pad = audio_mix.media_duration(audio) - audio_mix.media_duration(src)
+    if pad > 0.10:
+        filters.append(f"tpad=stop_mode=clone:stop_duration={pad:.3f}")
     if burn_ass is not None:
-        return ["-vf", subtitles.burn_vf(burn_ass), "-c:v", "libx264",
-                "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p"]
-    if video_is_h264(src):
-        return ["-c:v", "copy"]
-    return ["-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p"]
+        filters.append(subtitles.burn_vf(burn_ass))
+    return filters
 
 
 def mux_final(src: Path, audio: Path, out: Path, burn_ass: str | None) -> Path:
-    """Mux video + final audio track, burning the key-caption ASS when requested."""
+    """Mux video + final audio, freeze-padding the video so the VO is never cut."""
     out.parent.mkdir(parents=True, exist_ok=True)
+    filters = _video_filters(src, audio, burn_ass)
     cmd = ["ffmpeg", "-v", "error", "-y", "-i", str(src), "-i", str(audio)]
-    cmd += _video_codec_args(src, burn_ass)
+    if filters:
+        cmd += ["-vf", ",".join(filters), "-c:v", "libx264",
+                "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p"]
+    elif video_is_h264(src):
+        cmd += ["-c:v", "copy"]
+    else:
+        cmd += ["-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p"]
     cmd += ["-map", "0:v:0", "-map", "1:a:0", "-c:a", "aac", "-b:a", "192k",
             "-shortest", "-movflags", "+faststart", str(out)]
     run(cmd)
