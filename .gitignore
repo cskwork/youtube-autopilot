@@ -19,3 +19,7 @@ references/bgm_cache/*
 # OAuth tokens / secrets — never commit
 token.json
 client_secret*.json
+
+# Playwright agent CLI session artifacts (snapshots, console logs)
+.playwright-cli/
+**/.playwright-cli/
