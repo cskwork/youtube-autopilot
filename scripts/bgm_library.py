@@ -72,7 +72,12 @@ def _cache_hit(slug: str, cache_dir: Path) -> BgmResult | None:
         candidate = cache_dir / f"{slug}{ext}"
         if candidate.is_file():
             provenance = _read_sidecar(cache_dir / f"{slug}.json")
-            return BgmResult(path=str(candidate), source="cache", **provenance)
+            return BgmResult(
+                path=str(candidate),
+                source="cache",
+                license=str(provenance.get("license") or "cached (royalty-free)"),
+                attribution=provenance.get("attribution"),
+            )
     return None
 
 
