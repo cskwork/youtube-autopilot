@@ -131,23 +131,9 @@ def _ass_ts(seconds: float) -> str:
     return f"{h:d}:{m:02d}:{s:02d}.{cs:02d}"
 
 
-def _ass_header(width: int, height: int) -> str:
-    """Build an ASS header sized to the ACTUAL video resolution, and tuned
-    DIFFERENTLY for Shorts (9:16 vertical) vs a standard (16:9 landscape) video.
-
-    libass scales the whole script by PlayResX/Y -> frame size. A FIXED
-    1280x720 header on a 1080x1920 frame scales the Y axis ~2.67x, ballooning
-    the font and pushing every un-wrapped line off both edges. So PlayRes always
-    matches the real frame (1:1 scaling) and WrapStyle 0 wraps long Korean lines
-    within the side margins. Then the two FORMATS diverge:
-
-    - Shorts / vertical (height > width): viewed on a phone and the bottom ~15%
-      is covered by the Shorts UI (like/share/caption/handle). Use a larger
-      font (relative to width) and a tall bottom margin so captions sit ABOVE
-      that UI.
-    - Standard / landscape: the proven 16:9 look (font ~ width*0.034, modest
-      bottom margin) — 1280x720 reproduces the original 44px / MarginV 60.
-    """
+def _caption_metrics(width: int, height: int) -> dict:
+    """Per-format caption geometry: Shorts/9:16 (phone-legible font, high bottom
+    margin to clear the Shorts UI) vs standard/16:9 (the proven smaller look)."""
     portrait = height > width
     if portrait:                               # Shorts (9:16)
         font = max(28, round(width * 0.050))
@@ -157,7 +143,23 @@ def _ass_header(width: int, height: int) -> str:
         font = max(20, round(width * 0.034))
         margin_lr = round(width * 0.0625)
         margin_v = round(height * 0.085)
-    outline = max(2, round(font * 0.10))
+    return {"portrait": portrait, "font": font, "outline": max(2, round(font * 0.10)),
+            "margin_lr": margin_lr, "margin_v": margin_v}
+
+
+def _ass_header(width: int, height: int) -> str:
+    """Build an ASS header sized to the ACTUAL video resolution, and tuned
+    DIFFERENTLY for Shorts (9:16 vertical) vs a standard (16:9 landscape) video.
+
+    libass scales the whole script by PlayResX/Y -> frame size. A FIXED
+    1280x720 header on a 1080x1920 frame scales the Y axis ~2.67x, ballooning
+    the font and pushing every un-wrapped line off both edges. So PlayRes always
+    matches the real frame (1:1 scaling) and WrapStyle 0 wraps long Korean lines
+    within the side margins; per-format sizing comes from `_caption_metrics`.
+    """
+    m = _caption_metrics(width, height)
+    font, outline = m["font"], m["outline"]
+    margin_lr, margin_v = m["margin_lr"], m["margin_v"]
     return (
         "[Script Info]\n"
         "ScriptType: v4.00+\n"
@@ -182,19 +184,93 @@ def _ass_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
 
 
-def build_ass(segments: list[Segment], key_idx: list[int],
-              width: int = 1280, height: int = 720) -> str:
-    """Render a styled ASS subtitle file for the key indices only.
+# Korean variety/TV-show caption presets: (alignment, accent RGB). Cycled per
+# caption so color + position keep changing; most sit at the bottom (\an2) and
+# one pops to the top (\an8) for rhythm. Emphasis words get the accent colour +
+# a bigger, bolder, popped scale; the rest stay white.
+_CAPTION_PRESETS = [
+    (2, (255, 222, 0)),    # bottom, yellow
+    (8, (0, 224, 255)),    # top, cyan
+    (2, (255, 90, 160)),   # bottom, pink
+    (2, (124, 252, 120)),  # bottom, green
+]
 
-    Pass the real video width/height so the captions are sized to the frame
-    (9:16 Shorts or 16:9). Defaults keep the historical 16:9 behavior.
+
+def _ass_color(rgb: tuple[int, int, int]) -> str:
+    """RGB -> ASS &HBBGGRR& colour literal."""
+    r, g, b = rgb
+    return f"&H{b:02X}{g:02X}{r:02X}&"
+
+
+def _norm_token(tok: str) -> str:
+    """Token stripped of punctuation, for emphasis matching."""
+    return "".join(ch for ch in tok if ch.isalnum())
+
+
+def _emphasis_indices(tokens: list[str], emphasis: list[str] | None,
+                      max_emph: int = 2) -> set[int]:
+    """Which token positions to emphasize: any token whose alnum core contains a
+    given emphasis term; else fall back to the single longest token so EVERY
+    caption still gets one pop. Capped to the ``max_emph`` longest matches so a
+    caption never turns into a wall of colour."""
+    idxs: set[int] = set()
+    if emphasis:
+        for i, tok in enumerate(tokens):
+            core = _norm_token(tok)
+            if core and any(term and term in core for term in emphasis):
+                idxs.add(i)
+    if not idxs and tokens:
+        longest = max(range(len(tokens)), key=lambda i: len(_norm_token(tokens[i])))
+        if _norm_token(tokens[longest]):
+            idxs.add(longest)
+    if len(idxs) > max_emph:
+        idxs = set(sorted(idxs, key=lambda i: len(_norm_token(tokens[i])),
+                          reverse=True)[:max_emph])
+    return idxs
+
+
+def _style_caption(text: str, preset: tuple[int, tuple[int, int, int]],
+                   base_font: int, emphasis: list[str] | None) -> str:
+    """Render one caption as variety-style ASS: line-level alignment + fade,
+    accent-coloured popped emphasis words, plain white for the rest."""
+    align, accent = preset
+    accent_c = _ass_color(accent)
+    emph_fs = round(base_font * 1.34)
+    tokens = text.split(" ")
+    emph = _emphasis_indices(tokens, emphasis)
+    parts: list[str] = []
+    for i, tok in enumerate(tokens):
+        esc = _ass_escape(tok)
+        if i in emph:
+            parts.append(
+                f"{{\\c{accent_c}\\b1\\fs{emph_fs}\\fscx118\\fscy118"
+                f"\\t(0,140,\\fscx100\\fscy100)}}{esc}"
+                f"{{\\c&H00FFFFFF&\\b0\\fs{base_font}}}"  # reset color/bold/size, keep alignment
+            )
+        else:
+            parts.append(esc)
+    return f"{{\\an{align}\\fad(120,60)}}" + " ".join(parts)
+
+
+def build_ass(segments: list[Segment], key_idx: list[int],
+              width: int = 1280, height: int = 720,
+              emphasis: list[str] | None = None) -> str:
+    """Render a styled, Korean-variety-show ASS for the key indices only.
+
+    Pass the real video width/height so captions size to the frame (9:16 Shorts
+    or 16:9). ``emphasis`` is an optional list of key terms to highlight; tokens
+    containing one are accented/enlarged, else each caption pops its longest
+    token. Captions cycle through `_CAPTION_PRESETS` so colour and position keep
+    changing. Defaults keep the historical 16:9 geometry.
     """
+    base_font = _caption_metrics(width, height)["font"]
     lines = [_ass_header(width, height)]
-    for idx in key_idx:
+    for n, idx in enumerate(key_idx):
         seg = segments[idx]
+        preset = _CAPTION_PRESETS[n % len(_CAPTION_PRESETS)]
+        styled = _style_caption(seg.text, preset, base_font, emphasis)
         lines.append(
-            f"Dialogue: 0,{_ass_ts(seg.start)},{_ass_ts(seg.end)},Key,,0,0,0,,"
-            f"{_ass_escape(seg.text)}\n"
+            f"Dialogue: 0,{_ass_ts(seg.start)},{_ass_ts(seg.end)},Key,,0,0,0,,{styled}\n"
         )
     return "".join(lines)
 

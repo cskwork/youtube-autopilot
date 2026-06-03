@@ -132,8 +132,12 @@ reaches the next stage and never uploads. See `<gates>` below.
    bottom margin that clears the Shorts UI; a standard/landscape (16:9) video
    keeps the proven smaller look. `subtitles._ass_header` sets `PlayResX/Y` to
    the actual frame (1:1 scaling) and branches on portrait vs landscape, so a
-   fixed-aspect header never balloons or overflows the text. BGM resolution
-   order is explicit `--bgm` >
+   fixed-aspect header never balloons or overflows the text. Styling is
+   Korean-variety/TV-show flavored: captions cycle a colour+position palette
+   (`_CAPTION_PRESETS`) and POP key words (accent colour + bigger, bolder,
+   scale-animated) — emphasis terms come from `script.json` youtube tags (else
+   each caption pops its longest token), capped so a line never becomes a wall
+   of colour. BGM resolution order is explicit `--bgm` >
    mood cache > Jamendo. Real generation is the default: if no REAL source
    resolves, the stage HARD-STOPS unless `--allow-synth-bgm` is passed, which
    permits the synthesized CC0 ambient pad (ffmpeg `lavfi`) fallback; `--no-bgm`
