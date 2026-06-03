@@ -204,12 +204,17 @@ def synth_with_captions(args: argparse.Namespace, text: str, keys, work_dir: Pat
     return narration, segments, key_idx
 
 
-def write_captions(segments, key_idx, out_dir: Path) -> dict[str, object]:
-    """Persist .srt + .ass sidecars beside the output; return their paths."""
+def write_captions(segments, key_idx, out_dir: Path,
+                   width: int = 1280, height: int = 720) -> dict[str, object]:
+    """Persist .srt + .ass sidecars beside the output; return their paths.
+
+    ``width``/``height`` are the real video frame size so captions size to the
+    format (9:16 Shorts vs 16:9 standard); see ``subtitles._ass_header``.
+    """
     srt = out_dir / "captions.srt"
     ass = out_dir / "captions.ass"
     srt.write_text(subtitles.build_srt(segments, key_idx), encoding="utf-8")
-    ass.write_text(subtitles.build_ass(segments, key_idx), encoding="utf-8")
+    ass.write_text(subtitles.build_ass(segments, key_idx, width, height), encoding="utf-8")
     return {"srt": str(srt), "ass": str(ass), "key_count": len(key_idx)}
 
 
@@ -312,7 +317,9 @@ def conduct(args: argparse.Namespace, src: Path, out: Path) -> int:
         captions, burn_ass = None, None
         if args.subtitles_on:
             narration, segments, key_idx = synth_with_captions(args, text, fields["key_sentences"], work)
-            captions = write_captions(segments, key_idx, out.parent)
+            vw = int(_probe(src, "stream=width", "v:0") or 1280)
+            vh = int(_probe(src, "stream=height", "v:0") or 720)
+            captions = write_captions(segments, key_idx, out.parent, vw, vh)
             burn_ass = str(captions["ass"])
         else:
             narration = synth_whole(args, text, work)
