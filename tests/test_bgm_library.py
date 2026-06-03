@@ -51,15 +51,21 @@ class _FakeResp(io.BytesIO):
         return False
 
 
-def _mock_jamendo(monkeypatch, payload: dict, *, download=True):
-    """Patch urlopen: JSON for the API query, audio bytes for the MP3 download."""
+def _mock_jamendo(monkeypatch, payload: dict, *, content_type="audio/mpeg", is_audio=True):
+    """Patch urlopen + ffprobe so the path is fully offline.
+
+    JSON is returned for the API query and raw bytes for the MP3 download.
+    ``content_type`` lets a test simulate Jamendo's mislabeled header, and
+    ``is_audio`` stubs the ffprobe-based validator (True=accept, False=reject).
+    """
     def fake_urlopen(req, timeout=None):
         url = getattr(req, "full_url", req)
         if "api.jamendo.com" in str(url):
             return io.BytesIO(json.dumps(payload).encode("utf-8"))
-        return _FakeResp(b"FAKEMP3DATA", "audio/mpeg")
+        return _FakeResp(b"FAKEMP3DATA", content_type)
 
     monkeypatch.setattr(bgm_library.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(bgm_library, "_is_audio_file", lambda path: is_audio)
 
 
 # --- explicit override -------------------------------------------------------
@@ -144,6 +150,37 @@ def test_download_refuses_non_jamendo_host_falls_through(tmp_path, monkeypatch):
     _mock_jamendo(monkeypatch, payload)
     res = resolve("calm", cache_dir=tmp_path / "cache", duration=2.0, work_dir=tmp_path / "work")
     # non-jamendo host refused -> bounded download raises -> synth fallback
+    assert res.source == "synth"
+    assert res.attribution is None
+
+
+def test_jamendo_accepts_mislabeled_html_content_type_when_audio(tmp_path, monkeypatch):
+    """Jamendo mislabels real MP3s as text/html; ffprobe says audio -> accept."""
+    monkeypatch.setenv("JAMENDO_CLIENT_ID", "key123")
+    _mock_jamendo(
+        monkeypatch,
+        _canned_tracks("http://creativecommons.org/licenses/by/3.0/"),
+        content_type="text/html; charset=UTF-8",
+        is_audio=True,
+    )
+    cache = tmp_path / "cache"
+    res = resolve("calm", cache_dir=cache, duration=10.0, work_dir=tmp_path / "work")
+    assert res.source == "jamendo"
+    assert res.attribution is not None and "Gentle Morning" in res.attribution
+    assert Path(res.path).is_file()
+    assert (cache / f"{bgm_library.mood_slug('calm')}.json").is_file()
+
+
+def test_jamendo_rejects_non_audio_bytes_falls_through_to_synth(tmp_path, monkeypatch):
+    """ffprobe finds no audio stream -> reject the download -> synth fallback."""
+    monkeypatch.setenv("JAMENDO_CLIENT_ID", "key123")
+    _mock_jamendo(
+        monkeypatch,
+        _canned_tracks("http://creativecommons.org/licenses/by/3.0/"),
+        content_type="text/html; charset=UTF-8",
+        is_audio=False,
+    )
+    res = resolve("calm", cache_dir=tmp_path / "cache", duration=2.0, work_dir=tmp_path / "work")
     assert res.source == "synth"
     assert res.attribution is None
 
