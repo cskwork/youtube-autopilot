@@ -1,5 +1,15 @@
-page => page.evaluate(() => {
+page => page.evaluate(async () => {
   const videos = [...document.querySelectorAll('video')];
+  // Flow renders <video> tiles lazily: the element has a src but readyState 0
+  // and duration 0 until it is loaded. Force metadata to load so a finished
+  // clip is detected as ready instead of polling forever on duration 0.
+  await Promise.all(videos.map((v) => new Promise((res) => {
+    if (v.readyState >= 1 && v.duration > 0) return res();
+    try { v.muted = true; v.preload = 'metadata'; v.load(); } catch (e) {}
+    if (v.readyState >= 1) return res();
+    const t = setTimeout(res, 2500);
+    v.addEventListener('loadedmetadata', () => { clearTimeout(t); res(); }, { once: true });
+  })));
   const videoData = videos.map((video, index) => ({
     index,
     src: video.currentSrc || video.src || '',
