@@ -1,6 +1,6 @@
 ---
 name: vimax-youtube-autopilot
-description: Fully-automated YouTube video pipeline. Harvests trending ideas from the YouTube Studio inspiration feed (fallback YouTube trending), expands a chosen idea into a codex storyboard, renders the clip with Gemini/Google Flow, removes the Flow watermark with ffmpeg delogo, narrates it in Korean with Supertonic TTS, and uploads it as a PRIVATE draft via the YouTube Data API. Everything runs unattended; the ONLY human step is flipping the private draft to public in YouTube Studio. Use when the user wants an end-to-end "idea to private YouTube draft" automation, a Studio-inspired short, or a reproducible Flow + Korean-narration upload pipeline.
+description: Fully-automated YouTube video pipeline. Harvests trending ideas from the YouTube Studio inspiration feed (fallback YouTube trending), expands a chosen idea into a codex storyboard, renders motion clips with Gemini/Google Flow (one per scene, then assembled), removes the Flow sparkle watermark with ffmpeg delogo, narrates it in Korean with Supertonic TTS, and uploads it as a PRIVATE draft. Everything runs unattended; the ONLY human step is flipping the private draft to public in YouTube Studio. Two proven fallbacks for account/access splits: when the channel account lacks Flow access, build_slideshow.py renders a narrated Ken-Burns video from the storyboard stills; when the channel account differs from any GCP project (so Data API OAuth is impractical), upload_youtube_studio.py uploads by driving the logged-in Studio browser instead. Use when the user wants an end-to-end "idea to private YouTube draft" automation, a Studio-inspired short, or a reproducible Flow + Korean-narration upload pipeline.
 ---
 
 <objective>
@@ -19,6 +19,23 @@ private YouTube Data API upload (stops at the human publish gate).
 - The user wants to re-run a single stage (harvest, storyboard, script, video,
   delogo, narration, upload) with the same contracts.
 </when_to_use>
+
+<browser_attach>
+The browser stages (harvest, Flow video, Studio upload) drive ONE logged-in
+Chrome session via the Playwright agent CLI. Proven setup (Chrome 148, macOS):
+
+1. Chrome 148 ignores `--remote-debugging-port` on the default profile. Enable
+   it via the UI instead: open `chrome://inspect/#remote-debugging` and turn on
+   "Allow remote debugging for this browser instance" (serves 127.0.0.1:9222).
+2. Attach once: `npx @playwright/cli@latest attach --cdp=chrome -s=vya`.
+3. Use ONE session for every stage (`--session vya --no-attach`) so it stays a
+   single browser.
+4. ALWAYS use the system npm cache (empty `--npm-cache`). A custom cache pulls a
+   different @playwright/cli version whose daemon cannot see the attached
+   session — the #1 silent failure (scrapes return parse errors).
+5. `run-code` runs `page => ...` in NODE context; DOM scraping must live inside
+   `page.evaluate(() => {...})`, and `process` is unavailable in that sandbox.
+</browser_attach>
 
 <quick_start>
 One command runs the whole pipeline and stops at the private draft:
@@ -68,18 +85,31 @@ subprocesses, threading each stage's output into the next and writing a
    consolidated Flow prompt, per-scene prompts, and YouTube metadata
    (title/description/tags/category) as strict JSON. Output: `script.json`.
 4. **Video** (`generate_video.py`): seed the vendored `google_flow_cli.py` with
-   the Flow prompt + up to 3 storyboard frames, render and download ONLY the new
-   post-submit MP4. Output: `raw_flow.mp4`. In `--dry-run` this is replaced by a
-   supplied `--video` or a generated 2s placeholder clip.
+   a Flow prompt + storyboard frames, render and download ONLY the new
+   post-submit MP4. For a full-length result, call it once per
+   `scene_prompts[i]` (each seeded with its own `scene_0i.png`) to get one ~8s
+   clip per scene, then `assemble_flow_video.py` concats them, delogos, fits to
+   the narration length, and muxes. In `--dry-run` this is a supplied `--video`
+   or a generated 2s placeholder.
+   - Flow access fallback: if the channel account has no Flow video access, skip
+     Flow entirely and run `build_slideshow.py` to render a narrated Ken-Burns
+     video from the storyboard stills (no credits, no browser).
 5. **Delogo** (`remove_logo.py`): ffmpeg `delogo` wipes the bottom-right
-   Gemini/Flow watermark; the box is auto-sized from the frame resolution.
+   Gemini/Flow sparkle watermark. Default box auto-sizes from resolution; for
+   1280x720 Flow clips the watermark sits at ~(1140,645), so `--box
+   1095:600:160:100` is a tight fit. (`assemble_flow_video.py` does this inline.)
    Output: `delogo.mp4`.
 6. **Narration** (`add_narration.py`): Supertonic Korean TTS (default F1/Mina,
    speed 0.95, steps 16, lang ko) synthesizes the voice and ffmpeg muxes it.
    Output: `narrated.mp4`.
-7. **Upload** (`upload_youtube.py`): YouTube Data API v3 resumable upload as a
-   PRIVATE draft, metadata from `script.json`. Output: `video_id` + `studio_url`
-   in `manifest.json`. In `--dry-run` it validates only and uploads nothing.
+7. **Upload** — two paths, same private-draft outcome:
+   - `upload_youtube.py`: YouTube Data API v3 resumable upload, metadata from
+     `script.json`. Needs an OAuth Desktop client whose consent screen lists the
+     channel account as a test user. In `--dry-run` it validates only.
+   - `upload_youtube_studio.py` (proven, no OAuth): drives the logged-in Studio
+     browser — `setInputFiles` the MP4, set title/description, mark
+     not-made-for-kids, advance the wizard, set visibility, save. Use this when
+     the channel account differs from the GCP project account (the common case).
 
 The pipeline STOPS here. The ONLY remaining human step: open the private draft
 in YouTube Studio and flip it private -> public once reviewed.
@@ -123,13 +153,21 @@ in YouTube Studio and flip it private -> public once reviewed.
 - `scripts/make_storyboard.py` — Stage 2: idea -> scene beats + storyboard PNGs.
 - `scripts/write_script.py` — Stage 3: Korean narration + Flow prompts + YouTube
   metadata.
-- `scripts/generate_video.py` — Stage 4: Flow render via `google_flow_cli.py`.
+- `scripts/generate_video.py` — Stage 4: Flow render via `google_flow_cli.py`
+  (call once per scene for a full-length video).
+- `scripts/assemble_flow_video.py` — concat scene clips + delogo + fit to
+  narration + mux into one MP4.
+- `scripts/build_slideshow.py` — Flow-free fallback: narrated Ken-Burns video
+  from the storyboard stills.
 - `scripts/remove_logo.py` — Stage 5: ffmpeg `delogo` watermark removal.
 - `scripts/add_narration.py` — Stage 6: Supertonic Korean TTS + ffmpeg mux.
-- `scripts/upload_youtube.py` — Stage 7: private YouTube Data API upload.
+- `scripts/upload_youtube.py` — Stage 7a: private YouTube Data API upload.
+- `scripts/upload_youtube_studio.py` — Stage 7b: private upload by driving the
+  Studio browser (no OAuth; proven path).
 - `scripts/get_youtube_token.py` — one-time OAuth consent + token cache.
 - `scripts/google_flow_cli.py` — vendored Flow browser-automation CLI.
-- `scripts/js/` — browser helpers (`studio_inspiration.js`, `flow_*.js`).
+- `scripts/js/` — browser helpers (`studio_inspiration.js`, `flow_*.js`,
+  `studio_upload.tmpl.js`).
 - `references/runbook.md` — per-stage operational + debug guide.
 - `references/improvement_log.md` — living log of selector/prompt/failure fixes.
 - `tests/test_remove_logo.py` — delogo box geometry unit tests.
