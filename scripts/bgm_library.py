@@ -32,6 +32,8 @@ JAMENDO_API = "https://api.jamendo.com/v3.0/tracks/"
 # Accept only attribution-style or public-domain licenses; reject NC and ND.
 _ALLOWED_LICENSE_RE = re.compile(r"/(by|by-sa|zero|publicdomain|cc0)(/|$)", re.IGNORECASE)
 _FORBIDDEN_LICENSE_RE = re.compile(r"(by-nc|by-nd|nc-|-nc|-nd)", re.IGNORECASE)
+# Bound the MP3 download: only jamendo over https, audio content, capped size.
+_MAX_BGM_BYTES = 30 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -69,9 +71,33 @@ def _cache_hit(slug: str, cache_dir: Path) -> BgmResult | None:
     for ext in (".mp3", ".m4a", ".ogg", ".wav"):
         candidate = cache_dir / f"{slug}{ext}"
         if candidate.is_file():
-            return BgmResult(path=str(candidate), source="cache",
-                             license="cached (royalty-free)", attribution=None)
+            provenance = _read_sidecar(cache_dir / f"{slug}.json")
+            return BgmResult(path=str(candidate), source="cache", **provenance)
     return None
+
+
+def _read_sidecar(sidecar: Path) -> dict[str, str | None]:
+    """Read cached track provenance; fall back to the generic label if absent."""
+    try:
+        data = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"license": "cached (royalty-free)", "attribution": None}
+    return {
+        "license": str(data.get("license") or "cached (royalty-free)"),
+        "attribution": data.get("attribution"),
+    }
+
+
+def _write_sidecar(sidecar: Path, source: str, license_label: str,
+                   attribution: str | None) -> None:
+    """Persist a cache provenance sidecar next to the downloaded audio."""
+    sidecar.write_text(
+        json.dumps(
+            {"source": source, "license": license_label, "attribution": attribution},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
 
 
 # --- step 3: Jamendo ---------------------------------------------------------
@@ -124,17 +150,41 @@ def _fetch_jamendo(client_id: str, mood: str, slug: str, cache_dir: Path) -> Bgm
     return None
 
 
+def _bounded_download(url: str, dest: Path) -> None:
+    """Fetch an MP3 with host/scheme/content-type checks and a hard size cap.
+
+    Only https jamendo.com hosts are allowed; the response must look like audio
+    and stay under ``_MAX_BGM_BYTES``. Any violation raises so the caller's
+    try/except degrades to the synth pad instead of hanging or trusting junk.
+    """
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not (host == "jamendo.com" or host.endswith(".jamendo.com")):
+        raise ValueError(f"refusing non-jamendo BGM url: {url}")
+    req = urllib.request.Request(url, headers={"User-Agent": "vimax-bgm/1"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        ctype = (resp.headers.get("Content-Type") or "").lower()
+        if "audio" not in ctype and "octet-stream" not in ctype:
+            raise ValueError(f"unexpected BGM content-type: {ctype!r}")
+        data = resp.read(_MAX_BGM_BYTES + 1)
+    if len(data) > _MAX_BGM_BYTES:
+        raise ValueError(f"BGM download exceeds {_MAX_BGM_BYTES} bytes")
+    dest.write_bytes(data)
+
+
 def _download_track(track: dict, download: str, slug: str, cache_dir: Path) -> BgmResult:
     cache_dir.mkdir(parents=True, exist_ok=True)
     dest = cache_dir / f"{slug}.mp3"
-    urllib.request.urlretrieve(download, str(dest))
+    _bounded_download(download, dest)
     license_url = str(track.get("license_ccurl", ""))
+    license_label = _license_label(license_url)
     attribution = (
         f'"{track.get("name", "Untitled")}" by '
         f'{track.get("artist_name", "Unknown")} (Jamendo, {license_url})'
     )
+    _write_sidecar(cache_dir / f"{slug}.json", "jamendo", license_label, attribution)
     return BgmResult(path=str(dest), source="jamendo",
-                     license=_license_label(license_url), attribution=attribution)
+                     license=license_label, attribution=attribution)
 
 
 def _try_jamendo(mood: str, slug: str, cache_dir: Path) -> BgmResult | None:

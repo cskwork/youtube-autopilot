@@ -61,17 +61,23 @@ def _probe(path: Path, entries: str, stream: str | None = None) -> str:
     return subprocess.run(cmd, capture_output=True, text=True, check=True).stdout.strip()
 
 
-def _run_add_narration(tmp_path: Path, extra: list[str]) -> dict:
+_FULL_SCRIPT = {
+    "narration_ko": "첫 번째 문장입니다. 두 번째 문장입니다. 세 번째 문장입니다.",
+    "bgm_mood": "calm",
+    "key_sentences": ["첫 번째 문장입니다."],
+    "youtube": {"title": "t", "description": "d", "tags": ["a"], "category": "22"},
+}
+
+
+def _run_add_narration(tmp_path: Path, extra: list[str], script_data: dict | None = None) -> dict:
     video = _make_placeholder_video(tmp_path / "in.mp4")
     fake = tmp_path / "fake_supertts.py"
     fake.write_text(_FAKE_SUPERTTS, encoding="utf-8")
     script = tmp_path / "script.json"
-    script.write_text(json.dumps({
-        "narration_ko": "첫 번째 문장입니다. 두 번째 문장입니다. 세 번째 문장입니다.",
-        "bgm_mood": "calm",
-        "key_sentences": ["첫 번째 문장입니다."],
-        "youtube": {"title": "t", "description": "d", "tags": ["a"], "category": "22"},
-    }, ensure_ascii=False), encoding="utf-8")
+    script.write_text(
+        json.dumps(script_data or _FULL_SCRIPT, ensure_ascii=False),
+        encoding="utf-8",
+    )
     out = tmp_path / "narrated.mp4"
     cmd = [
         sys.executable, str(ADD_NARRATION),
@@ -116,3 +122,33 @@ def test_no_subtitles_no_bgm_keeps_audio(tmp_path):
     assert float(_probe(out, "format=duration")) > 0
     assert result["bgm"] is None
     assert result["subtitles"] is None
+
+
+def test_legacy_script_without_bgm_or_keys(tmp_path):
+    """Acceptance #6: OLD-style script (narration_ko + youtube only) still works.
+
+    No bgm_mood and no key_sentences -> mood is DERIVED from youtube tags/title
+    and captions fall back to the sparse heuristic; output is a valid h264+aac MP4.
+    """
+    legacy = {
+        "narration_ko": "첫 번째 문장입니다. 두 번째 문장입니다. 세 번째 문장입니다.",
+        "youtube": {
+            "title": "차분한 영상",
+            "description": "d",
+            "tags": ["calm", "ambient", "study"],
+            "category": "22",
+        },
+    }
+    result = _run_add_narration(tmp_path, [], script_data=legacy)
+    out = Path(result["out"])
+    assert out.is_file()
+    # valid h264 + aac MP4 with positive duration
+    assert _probe(out, "stream=codec_name", "v:0") == "h264"
+    assert _probe(out, "stream=codec_name", "a:0") == "aac"
+    assert float(_probe(out, "format=duration")) > 0
+    # mood was derived (synth BGM resolved offline), heuristic captions present
+    assert result["bgm"]["source"] == "synth"
+    assert result["subtitles"]["key_count"] >= 1
+    assert Path(result["subtitles"]["srt"]).is_file()
+    # F1: the concatenated narration WAV path is recorded in the result
+    assert result["wav"].endswith("narration.wav")

@@ -11,8 +11,6 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "bgm_library.py"
 _SPEC = importlib.util.spec_from_file_location("bgm_library", _SCRIPT)
 assert _SPEC is not None and _SPEC.loader is not None
@@ -23,14 +21,14 @@ _SPEC.loader.exec_module(bgm_library)
 resolve = bgm_library.resolve
 
 
-def _canned_tracks(license_url: str):
-    """A Jamendo API response with one track at the given license URL."""
+def _canned_tracks(license_url: str, download_url: str = "https://storage.jamendo.com/track.mp3"):
+    """A Jamendo API response with one track at the given license + download URL."""
     return {
         "results": [
             {
                 "name": "Gentle Morning",
                 "artist_name": "Test Artist",
-                "audiodownload": "https://example.com/track.mp3",
+                "audiodownload": download_url,
                 "license_ccurl": license_url,
                 "musicinfo": {},
             }
@@ -38,18 +36,30 @@ def _canned_tracks(license_url: str):
     }
 
 
-def _mock_jamendo(monkeypatch, payload: dict, *, download=True):
-    """Patch urlopen to return canned JSON and urlretrieve to write a fake file."""
-    def fake_urlopen(req, timeout=None):
-        return io.BytesIO(json.dumps(payload).encode("utf-8"))
+class _FakeResp(io.BytesIO):
+    """A urlopen() context-manager stand-in with a .headers attribute."""
 
-    def fake_urlretrieve(url, dest):
-        Path(dest).write_bytes(b"FAKEMP3DATA")
-        return dest, None
+    def __init__(self, data: bytes, content_type: str):
+        super().__init__(data)
+        self.headers = {"Content-Type": content_type}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
+
+
+def _mock_jamendo(monkeypatch, payload: dict, *, download=True):
+    """Patch urlopen: JSON for the API query, audio bytes for the MP3 download."""
+    def fake_urlopen(req, timeout=None):
+        url = getattr(req, "full_url", req)
+        if "api.jamendo.com" in str(url):
+            return io.BytesIO(json.dumps(payload).encode("utf-8"))
+        return _FakeResp(b"FAKEMP3DATA", "audio/mpeg")
 
     monkeypatch.setattr(bgm_library.urllib.request, "urlopen", fake_urlopen)
-    if download:
-        monkeypatch.setattr(bgm_library.urllib.request, "urlretrieve", fake_urlretrieve)
 
 
 # --- explicit override -------------------------------------------------------
@@ -122,6 +132,52 @@ def test_jamendo_network_error_falls_through(tmp_path, monkeypatch):
     monkeypatch.setattr(bgm_library.urllib.request, "urlopen", boom)
     res = resolve("calm", cache_dir=tmp_path / "cache", duration=2.0, work_dir=tmp_path / "work")
     assert res.source == "synth"
+
+
+def test_download_refuses_non_jamendo_host_falls_through(tmp_path, monkeypatch):
+    monkeypatch.setenv("JAMENDO_CLIENT_ID", "key123")
+    # API returns a clean CC-BY track but with an off-host download URL.
+    payload = _canned_tracks(
+        "http://creativecommons.org/licenses/by/3.0/",
+        download_url="https://evil.example.com/track.mp3",
+    )
+    _mock_jamendo(monkeypatch, payload)
+    res = resolve("calm", cache_dir=tmp_path / "cache", duration=2.0, work_dir=tmp_path / "work")
+    # non-jamendo host refused -> bounded download raises -> synth fallback
+    assert res.source == "synth"
+    assert res.attribution is None
+
+
+# --- cache provenance sidecar ------------------------------------------------
+
+def test_cache_sidecar_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("JAMENDO_CLIENT_ID", "key123")
+    cache = tmp_path / "cache"
+    _mock_jamendo(monkeypatch, _canned_tracks("http://creativecommons.org/licenses/by-sa/3.0/"))
+    # First resolve downloads + writes the sidecar.
+    first = resolve("calm", cache_dir=cache, duration=10.0, work_dir=tmp_path / "work")
+    assert first.source == "jamendo"
+    slug = bgm_library.mood_slug("calm")
+    sidecar = cache / f"{slug}.json"
+    assert sidecar.is_file()
+    # Second resolve is a cache hit and must report the REAL license/attribution.
+    second = resolve("calm", cache_dir=cache, duration=10.0, work_dir=tmp_path / "work")
+    assert second.source == "cache"
+    assert second.license == first.license
+    assert second.attribution == first.attribution
+    assert "Gentle Morning" in (second.attribution or "")
+
+
+def test_cache_hit_without_sidecar_uses_generic_label(tmp_path, monkeypatch):
+    monkeypatch.delenv("JAMENDO_CLIENT_ID", raising=False)
+    cache = tmp_path / "cache"
+    cache.mkdir(parents=True)
+    slug = bgm_library.mood_slug("calm")
+    (cache / f"{slug}.mp3").write_bytes(b"handdropped")
+    res = resolve("calm", cache_dir=cache, duration=10.0, work_dir=tmp_path / "work")
+    assert res.source == "cache"
+    assert res.license == "cached (royalty-free)"
+    assert res.attribution is None
 
 
 # --- synth fallback ----------------------------------------------------------
