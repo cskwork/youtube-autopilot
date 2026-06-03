@@ -6,11 +6,12 @@ Resolution order (first hit wins):
   2. local cache hit for the mood slug under cache_dir;
   3. Jamendo API IF JAMENDO_CLIENT_ID is set — CC-BY / CC-BY-SA / CC0 only,
      never NC/ND; download + cache; on ANY error fall through;
-  4. synthesized ambient pad via ffmpeg lavfi (CC0, no attribution) — always
-     succeeds so BGM is guaranteed even offline with no key.
+  4. synthesized ambient pad via ffmpeg lavfi (CC0, no attribution) — ONLY when
+     allow_synth is set; the offline fallback that needs no key.
 
-Only an env key is read for Jamendo; nothing is hardcoded. The run never fails
-for lack of music.
+Only an env key is read for Jamendo; nothing is hardcoded. When allow_synth is
+False (the pipeline default), resolve() returns None if steps 1-3 miss, and the
+caller hard-stops rather than silently degrading to the synth pad.
 """
 
 from __future__ import annotations
