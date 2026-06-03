@@ -1,0 +1,21 @@
+{
+  "mode": "LEGACY",
+  "slug": "2026-06-03-bgm-subtitles",
+  "base_branch": "main",
+  "run_branch": "feat/bgm-subtitles",
+  "target_branch": "feat/bgm-subtitles",
+  "auto_merge_to_main": false,
+  "worktree_path": "/Users/danny/Documents/PARA/Resource/autoresearch/vimax-autopilot-bgm-wt",
+  "repo_under_change": "skills/vimax-youtube-autopilot",
+  "build_commit": null,
+  "phase": "build",
+  "human_feedback_approved": true,
+  "human_feedback_decisions": {
+    "proceed": true,
+    "bgm_mix": "low-volume + ducking ON (vol ~0.16, sidechaincompress)",
+    "attribution": "auto-append to YouTube description + CREDITS.txt"
+  },
+  "fix_cycles": 0,
+  "error_signatures": {},
+  "decision": "GO"
+}

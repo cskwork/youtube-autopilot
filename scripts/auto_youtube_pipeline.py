@@ -255,7 +255,7 @@ def stage_delogo(raw: Path, paths: dict[str, Path]) -> dict:
 # --- stage 6: narration ------------------------------------------------------
 
 def stage_narration(args: argparse.Namespace, delogo: Path, script: Path, paths: dict[str, Path]) -> dict:
-    """Run add_narration with Supertonic Korean TTS; return its result dict."""
+    """Run add_narration: Korean TTS + low BGM + selective captions (default on)."""
     cmd = py("add_narration.py") + [
         "--in", str(delogo),
         "--out", str(paths["narrated_video"]),
@@ -263,16 +263,23 @@ def stage_narration(args: argparse.Namespace, delogo: Path, script: Path, paths:
         "--voice", args.voice,
         "--force-tts",
     ]
+    if args.no_bgm:
+        cmd.append("--no-bgm")
+    if args.no_subtitles:
+        cmd.append("--no-subtitles")
+    if args.bgm:
+        cmd += ["--bgm", str(Path(args.bgm).expanduser().resolve())]
     return run_stage("add_narration", cmd)
 
 
 # --- stage 7: upload ---------------------------------------------------------
 
-def stage_upload(args: argparse.Namespace, video: Path, script: Path) -> dict | None:
+def stage_upload(args: argparse.Namespace, video: Path, script: Path, extra_desc: str) -> dict | None:
     """Run upload_youtube as a private draft (or dry-run); return its result.
 
     Returns None when uploading is fully suppressed via --no-upload (without
     --dry-run), so the pipeline still stops cleanly at a local final video.
+    ``extra_desc`` (e.g. BGM attribution) is appended to the description.
     """
     if args.no_upload and not args.dry_run:
         log("[upload] skipped (--no-upload); final video stays local")
@@ -282,6 +289,8 @@ def stage_upload(args: argparse.Namespace, video: Path, script: Path) -> dict | 
         "--script-json", str(script),
         "--privacy", args.privacy,
     ]
+    if extra_desc:
+        cmd += ["--extra-description", extra_desc]
     cmd += _upload_auth_args(args)
     if args.dry_run:
         cmd.append("--dry-run")
@@ -329,7 +338,17 @@ def _narration_info(args: argparse.Namespace, narration: dict) -> dict:
         "voice_name": narration.get("voice_name"),
         "tts": narration.get("tts"),
         "wav": narration.get("wav"),
+        "bgm": narration.get("bgm"),
+        "subtitles": narration.get("subtitles"),
+        "credits": narration.get("credits"),
     }
+
+
+def _bgm_attribution(narration: dict) -> str:
+    """Extract the BGM attribution line from a narration result, or empty string."""
+    bgm = narration.get("bgm") or {}
+    attribution = bgm.get("attribution") if isinstance(bgm, dict) else None
+    return f"Background music: {attribution}" if attribution else ""
 
 
 def _youtube_info(args: argparse.Namespace, upload: dict) -> dict:
@@ -382,6 +401,9 @@ def _add_pipeline_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dry-run", action="store_true", help="skip Flow submit and real upload")
     parser.add_argument("--session", default="vya", help="single Playwright agent session for all browser stages")
     parser.add_argument("--no-attach", action="store_true", help="reuse an already-attached browser session")
+    parser.add_argument("--no-bgm", action="store_true", help="Stage 6: disable background music")
+    parser.add_argument("--no-subtitles", action="store_true", help="Stage 6: disable key-sentence captions")
+    parser.add_argument("--bgm", help="Stage 6: explicit BGM track path (overrides mood resolution)")
 
 
 def _add_upload_args(parser: argparse.ArgumentParser) -> None:
@@ -448,7 +470,7 @@ def run_pipeline(args: argparse.Namespace, paths: dict[str, Path]) -> dict:
     final_video = Path(narration["out"]).resolve()
 
     stage_header(7, total, "upload_youtube")
-    upload = stage_upload(args, final_video, script)
+    upload = stage_upload(args, final_video, script, _bgm_attribution(narration))
 
     return {
         "ideas": ideas, "idea": idea, "storyboard_dir": storyboard_dir,

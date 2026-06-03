@@ -17,11 +17,16 @@ from typing import Any
 OUTPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["narration_ko", "flow_prompt", "scene_prompts", "youtube"],
+    "required": [
+        "narration_ko", "flow_prompt", "scene_prompts",
+        "bgm_mood", "key_sentences", "youtube",
+    ],
     "properties": {
         "narration_ko": {"type": "string"},
         "flow_prompt": {"type": "string"},
         "scene_prompts": {"type": "array", "items": {"type": "string"}},
+        "bgm_mood": {"type": "string"},
+        "key_sentences": {"type": "array", "items": {"type": "string"}},
         "youtube": {
             "type": "object",
             "additionalProperties": False,
@@ -36,7 +41,10 @@ OUTPUT_SCHEMA: dict[str, Any] = {
     },
 }
 
-REQUIRED_TOP = ("narration_ko", "flow_prompt", "scene_prompts", "youtube")
+REQUIRED_TOP = (
+    "narration_ko", "flow_prompt", "scene_prompts",
+    "bgm_mood", "key_sentences", "youtube",
+)
 REQUIRED_YT = ("title", "description", "tags", "category")
 
 
@@ -99,6 +107,12 @@ def build_prompt(
         "on-screen text, fake logos, or watermarks.\n"
         '- "scene_prompts": an array with exactly one cinematic Flow prompt per '
         f"storyboard scene ({count} items), in scene order.\n"
+        '- "bgm_mood": short English mood/genre keywords for background-music '
+        'search (e.g., "calm uplifting ambient corporate"); no Korean, no '
+        "punctuation lists.\n"
+        '- "key_sentences": an array of 2-4 of the MOST important narration '
+        "sentences, copied VERBATIM from narration_ko (exact same characters), "
+        "to be shown as on-screen captions.\n"
         '- "youtube": object with "title" (<=100 characters), "description" '
         "(multi-line, starts with a hook line then chapter lines), "
         '"tags" (array of short keyword strings), and "category" set to "22".\n\n'
@@ -186,6 +200,10 @@ def validate(result: dict[str, Any]) -> None:
         raise SystemExit(f"missing required keys: {', '.join(missing)}")
     if not isinstance(result["scene_prompts"], list):
         raise SystemExit("scene_prompts must be an array")
+    if not isinstance(result["bgm_mood"], str) or not result["bgm_mood"].strip():
+        raise SystemExit("bgm_mood must be a non-empty string")
+    if not isinstance(result["key_sentences"], list):
+        raise SystemExit("key_sentences must be an array")
     youtube = result["youtube"]
     if not isinstance(youtube, dict):
         raise SystemExit("youtube must be an object")
