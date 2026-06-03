@@ -237,3 +237,33 @@ def test_synth_is_deterministic_per_mood(tmp_path, monkeypatch):
     res2 = resolve("dreamy", cache_dir=tmp_path / "c2", duration=2.0, work_dir=tmp_path / "w2")
     # same mood -> same synth recipe -> identical bytes
     assert Path(res1.path).read_bytes() == Path(res2.path).read_bytes()
+
+
+# --- allow_synth=False (real-generation-by-default policy) --------------------
+
+def test_no_synth_returns_none_when_no_real_source(tmp_path, monkeypatch):
+    monkeypatch.delenv("JAMENDO_CLIENT_ID", raising=False)
+    # No explicit, no cache, no key, synth disallowed -> None (caller hard-stops).
+    res = resolve("dreamy", cache_dir=tmp_path / "cache", duration=2.0,
+                  work_dir=tmp_path / "work", allow_synth=False)
+    assert res is None
+
+
+def test_no_synth_still_uses_real_jamendo(tmp_path, monkeypatch):
+    monkeypatch.setenv("JAMENDO_CLIENT_ID", "key123")
+    _mock_jamendo(monkeypatch, _canned_tracks("http://creativecommons.org/licenses/by/3.0/"))
+    # A REAL source still resolves even with synth disallowed.
+    res = resolve("calm", cache_dir=tmp_path / "cache", duration=10.0,
+                  work_dir=tmp_path / "work", allow_synth=False)
+    assert res is not None
+    assert res.source == "jamendo"
+
+
+def test_no_synth_still_uses_explicit(tmp_path, monkeypatch):
+    monkeypatch.delenv("JAMENDO_CLIENT_ID", raising=False)
+    explicit = tmp_path / "track.mp3"
+    explicit.write_bytes(b"data")
+    res = resolve("calm", explicit_path=str(explicit), cache_dir=tmp_path / "cache",
+                  duration=2.0, work_dir=tmp_path / "work", allow_synth=False)
+    assert res is not None
+    assert res.source == "explicit"

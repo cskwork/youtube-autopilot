@@ -268,8 +268,16 @@ def resolve(
     cache_dir: Path,
     duration: float,
     work_dir: Path,
-) -> BgmResult:
-    """Resolve one royalty-free track for the mood via the fallback chain."""
+    allow_synth: bool = True,
+) -> BgmResult | None:
+    """Resolve one royalty-free track for the mood via the fallback chain.
+
+    Order: explicit > cache > Jamendo > synthesized pad. When ``allow_synth`` is
+    False, the synthesized-pad fallback is skipped and ``None`` is returned if no
+    REAL source (explicit/cache/Jamendo) resolves, so the caller can hard-stop
+    instead of silently degrading to synth. ``allow_synth`` defaults True to keep
+    the offline-safe guarantee for callers that opt into it.
+    """
     cache_dir = Path(cache_dir)
     work_dir = Path(work_dir)
     slug = mood_slug(mood)
@@ -282,6 +290,8 @@ def resolve(
     online = _try_jamendo(mood, slug, cache_dir)
     if online:
         return online
+    if not allow_synth:
+        return None
     return _synth_pad(mood, duration, work_dir)
 
 
@@ -292,6 +302,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cache-dir", default="references/bgm_cache", help="track cache dir")
     parser.add_argument("--duration", type=float, default=10.0, help="synth pad length seconds")
     parser.add_argument("--work-dir", default=".", help="work dir for the synth pad")
+    parser.add_argument("--no-synth", dest="allow_synth", action="store_false",
+                        help="do not fall back to the synthesized pad; fail if no real track resolves")
+    parser.set_defaults(allow_synth=True)
     return parser.parse_args()
 
 
@@ -300,8 +313,13 @@ def main() -> int:
     res = resolve(
         args.mood, explicit_path=args.bgm,
         cache_dir=Path(args.cache_dir).resolve(), duration=args.duration,
-        work_dir=Path(args.work_dir).resolve(),
+        work_dir=Path(args.work_dir).resolve(), allow_synth=args.allow_synth,
     )
+    if res is None:
+        raise SystemExit(
+            f"no real BGM resolved for mood={args.mood!r} and --no-synth set "
+            "(provide --bgm, a cache hit, or JAMENDO_CLIENT_ID)"
+        )
     print(json.dumps({
         "ok": True, "path": res.path, "source": res.source,
         "license": res.license, "attribution": res.attribution,

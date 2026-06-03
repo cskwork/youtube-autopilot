@@ -74,6 +74,14 @@ subprocesses, threading each stage's output into the next and writing a
 `manifest.json`. Each stage also runs standalone with the same contract (one
 `{"ok": true, ...}` JSON line on stdout, logs on stderr).
 
+Every stage must pass before the next begins. Exit-code-0 and `{"ok": true}` are
+necessary but NOT sufficient: after each stage the orchestrator runs a
+`scripts/stage_gates.py` verification on the REAL artifact and hard-stops
+(`GATE FAILED after '<stage>'`) the moment something is missing or degraded — a
+truncated/streamless video, a SILENT narration track (TTS produced nothing), an
+empty ideas file, or a storyboard with no rendered frames. A failing gate never
+reaches the next stage and never uploads. See `<gates>` below.
+
 1. **Harvest** (`harvest_ideas.py`): attach to logged-in Chrome, scrape the
    YouTube Studio inspiration feed (`js/studio_inspiration.js`), fall back to
    youtube.com trending, then ask codex to rank N idea objects. With `--topic`
@@ -109,9 +117,11 @@ subprocesses, threading each stage's output into the next and writing a
    `bgm_library.py` (resolve one track by mood), `audio_mix.py` (pure ffmpeg
    mix graph). Only the KEY sentences (from `script.json` `key_sentences`, else
    a sparse heuristic) are burned in as bottom-centered captions at exact times
-   (forces a libx264 re-encode). BGM is ALWAYS present: if the optional
-   `JAMENDO_CLIENT_ID` env key is unset or the network/track is unusable, a
-   synthesized ambient pad (CC0, ffmpeg `lavfi`) is used. Only CC-BY/CC-BY-SA/CC0
+   (forces a libx264 re-encode). BGM resolution order is explicit `--bgm` >
+   mood cache > Jamendo. Real generation is the default: if no REAL source
+   resolves, the stage HARD-STOPS unless `--allow-synth-bgm` is passed, which
+   permits the synthesized CC0 ambient pad (ffmpeg `lavfi`) fallback; `--no-bgm`
+   is the explicit narration-only opt-out. Only CC-BY/CC-BY-SA/CC0
    tracks are accepted; when a track requires credit, attribution is written to
    `CREDITS.txt` beside the video and threaded into the upload description.
    `--no-bgm`/`--no-subtitles` restore the prior single-shot, music-free path.
@@ -128,6 +138,30 @@ subprocesses, threading each stage's output into the next and writing a
 The pipeline STOPS here. The ONLY remaining human step: open the private draft
 in YouTube Studio and flip it private -> public once reviewed.
 </process>
+
+<gates>
+`scripts/stage_gates.py` is the teeth behind "each stage must pass". After every
+stage the orchestrator re-inspects the produced artifact and raises a hard stop
+on any degradation, so a failure (video gen, audio gen, etc.) NEVER carries
+forward or uploads:
+
+- harvest -> `gate_ideas`: ideas.json parses and has >= idea-index+1 ideas.
+- storyboard -> `gate_storyboard`: storyboard.json parses and >= 1 real
+  `scene_*.png` frame exists (catches gen.sh image failures).
+- script -> `gate_script`: non-empty `narration_ko` and `flow_prompt`.
+- video -> `gate_video`: file present, a real video stream, duration above a
+  floor, non-trivial size (catches truncated/zero-byte/streamless Flow output).
+- delogo -> `gate_video`: the delogo output is still a real video.
+- narration -> `gate_narration`: video AND audio streams present, duration sane,
+  and the audio is NOT effectively silent (ffmpeg `volumedetect` mean dBFS above
+  the silence threshold). This catches the TTS-silent-failure that the
+  `{"tts": true}` flag cannot. `add_narration.py` self-applies the same check.
+
+Fallbacks are opt-in (real generation by default): the synthesized BGM pad needs
+`--allow-synth-bgm`; otherwise a BGM-on run with no real track hard-stops with an
+actionable message. Tune thresholds via `stage_gates.DEFAULT_SILENCE_DB` and the
+per-gate `min_duration` / `min_bytes` args.
+</gates>
 
 <requirements>
 - Python 3.12 with `pip install -r requirements.txt` (google-api-python-client,
@@ -154,6 +188,10 @@ in YouTube Studio and flip it private -> public once reviewed.
 </requirements>
 
 <important_constraints>
+- Fail-fast: every stage is gated (`<gates>`). The pipeline NEVER continues past
+  a failed stage — a failed video gen, silent narration, empty harvest, or
+  frameless storyboard hard-stops with `GATE FAILED after '<stage>'` and never
+  uploads. Designed fallbacks (synth BGM) are opt-in, not silent.
 - Upload privacy defaults to `private`. The pipeline NEVER auto-publishes; the
   only human step is flipping the draft to public in YouTube Studio.
 - Each fresh Flow submit and each codex call may spend credits/tokens; prefer
@@ -170,7 +208,9 @@ in YouTube Studio and flip it private -> public once reviewed.
 
 <files>
 - `scripts/auto_youtube_pipeline.py` — one-command end-to-end orchestrator;
-  writes `manifest.json` and stops at the private draft.
+  gates every stage, writes `manifest.json`, stops at the private draft.
+- `scripts/stage_gates.py` — per-stage artifact verification (ffprobe/ffmpeg);
+  raises `GateError` so the orchestrator hard-stops on any degraded output.
 - `scripts/harvest_ideas.py` — Stage 1: Studio inspiration / trending -> ranked
   ideas via codex.
 - `scripts/make_storyboard.py` — Stage 2: idea -> scene beats + storyboard PNGs.
@@ -205,7 +245,12 @@ in YouTube Studio and flip it private -> public once reviewed.
 - `tests/test_subtitles.py` — Korean split, timing, key selection, caption files.
 - `tests/test_bgm_library.py` — BGM resolution order + license filter (mocked).
 - `tests/test_add_narration_integration.py` — offline Stage 6 end-to-end (stub
-  TTS, real ffmpeg): asserts audio stream, duration, captions, CREDITS handling.
+  TTS, real ffmpeg): asserts audio stream, duration, captions, CREDITS handling,
+  synth-BGM opt-in, and the no-real-BGM hard stop.
+- `tests/test_stage_gates.py` — gate RED/GREEN proofs on ffmpeg fixtures
+  (good/no-audio/silent/truncated/short) plus the JSON/storyboard gates.
+- `tests/test_pipeline_gates.py` — orchestrator wiring: a degraded artifact
+  (junk video / silent narration) hard-stops `run_pipeline` BEFORE upload.
 </files>
 
 <validation>
@@ -213,14 +258,20 @@ Confirm the orchestrator and every stage parse cleanly:
 
 ```bash
 for f in scripts/*.py; do python3 "$f" --help >/dev/null || echo "FAIL: $f"; done
-python3 -m pytest tests/test_remove_logo.py -q
+python3 -m pytest -q   # full suite, incl. test_stage_gates + test_pipeline_gates
 ```
 
-Validate the full chain without Flow credits or an upload (uses a 2s placeholder
-clip when no `--video` is supplied) and inspect the manifest:
+The gate suite is the proof that "each stage must pass": `test_stage_gates.py`
+shows each gate RAISES on a degraded artifact (no-audio / silent / truncated)
+and PASSES a real one; `test_pipeline_gates.py` shows a degraded stage output
+hard-stops the orchestrator before upload.
+
+Validate the full chain without Flow credits or an upload. `--dry-run` uses a 2s
+placeholder clip when no `--video` is supplied; add `--allow-synth-bgm` (no
+Jamendo key) or `--no-bgm`, since BGM-on hard-stops without a real track:
 
 ```bash
-python3 scripts/auto_youtube_pipeline.py --topic "테스트" --dry-run
+python3 scripts/auto_youtube_pipeline.py --topic "테스트" --dry-run --allow-synth-bgm
 cat <out-dir>/manifest.json
 ```
 

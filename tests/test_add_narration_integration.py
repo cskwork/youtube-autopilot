@@ -9,6 +9,7 @@ behaviors hold.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -69,7 +70,13 @@ _FULL_SCRIPT = {
 }
 
 
-def _run_add_narration(tmp_path: Path, extra: list[str], script_data: dict | None = None) -> dict:
+def _run_proc(tmp_path: Path, extra: list[str],
+              script_data: dict | None = None) -> subprocess.CompletedProcess[str]:
+    """Run add_narration with a stub TTS; return the raw process (no assertion).
+
+    JAMENDO_CLIENT_ID is stripped from the child env so BGM resolution is
+    deterministic (no real online track), exercising the synth-vs-hard-stop path.
+    """
     video = _make_placeholder_video(tmp_path / "in.mp4")
     fake = tmp_path / "fake_supertts.py"
     fake.write_text(_FAKE_SUPERTTS, encoding="utf-8")
@@ -86,14 +93,22 @@ def _run_add_narration(tmp_path: Path, extra: list[str], script_data: dict | Non
         "--supertts-command", f"{sys.executable} {fake}",
         *extra,
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    env = {**os.environ}
+    env.pop("JAMENDO_CLIENT_ID", None)
+    return subprocess.run(cmd, capture_output=True, text=True, env=env)
+
+
+def _run_add_narration(tmp_path: Path, extra: list[str], script_data: dict | None = None) -> dict:
+    """Run add_narration expecting success; return its parsed JSON result."""
+    proc = _run_proc(tmp_path, extra, script_data)
     assert proc.returncode == 0, f"add_narration failed:\nSTDOUT:{proc.stdout}\nSTDERR:{proc.stderr}"
     line = [ln for ln in proc.stdout.splitlines() if ln.strip().startswith("{")][-1]
     return json.loads(line)
 
 
 def test_subtitles_and_synth_bgm(tmp_path):
-    result = _run_add_narration(tmp_path, ["--subtitles", "--bgm-mood", "calm"])
+    # Synth pad is now opt-in: pass --allow-synth-bgm to permit the CC0 fallback.
+    result = _run_add_narration(tmp_path, ["--subtitles", "--bgm-mood", "calm", "--allow-synth-bgm"])
     out = Path(result["out"])
     assert out.is_file()
     # audio stream present
@@ -139,16 +154,39 @@ def test_legacy_script_without_bgm_or_keys(tmp_path):
             "category": "22",
         },
     }
-    result = _run_add_narration(tmp_path, [], script_data=legacy)
+    result = _run_add_narration(tmp_path, ["--allow-synth-bgm"], script_data=legacy)
     out = Path(result["out"])
     assert out.is_file()
     # valid h264 + aac MP4 with positive duration
     assert _probe(out, "stream=codec_name", "v:0") == "h264"
     assert _probe(out, "stream=codec_name", "a:0") == "aac"
     assert float(_probe(out, "format=duration")) > 0
-    # mood was derived (synth BGM resolved offline), heuristic captions present
+    # mood was derived (synth BGM resolved offline, opt-in), heuristic captions present
     assert result["bgm"]["source"] == "synth"
     assert result["subtitles"]["key_count"] >= 1
     assert Path(result["subtitles"]["srt"]).is_file()
     # F1: the concatenated narration WAV path is recorded in the result
     assert result["wav"].endswith("narration.wav")
+
+
+def test_bgm_on_without_synth_flag_hard_stops(tmp_path):
+    """New gate: BGM on + no real source + no --allow-synth-bgm -> hard stop.
+
+    Enforces "real generation by default": the run must NOT silently degrade to
+    the synth pad. It fails fast with an actionable message instead.
+    """
+    proc = _run_proc(tmp_path, ["--bgm-mood", "calm"])
+    assert proc.returncode != 0
+    assert "no real BGM resolved" in proc.stderr
+    assert "--allow-synth-bgm" in proc.stderr
+    # nothing was reported as a success result
+    assert '"ok": true' not in proc.stdout
+
+
+def test_no_bgm_runs_narration_only_without_flag(tmp_path):
+    """--no-bgm is the explicit opt-out: narration-only succeeds with no synth."""
+    result = _run_add_narration(tmp_path, ["--no-bgm"])
+    out = Path(result["out"])
+    assert out.is_file()
+    assert _probe(out, "stream=codec_type", "a:0") == "audio"
+    assert result["bgm"] is None
