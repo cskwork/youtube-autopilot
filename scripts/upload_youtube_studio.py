@@ -64,6 +64,9 @@ def resolve_meta(args: argparse.Namespace) -> tuple[str, str]:
         desc = desc or str(yt.get("description", ""))
     if not title:
         raise SystemExit("a title is required (via --title or --script-json youtube.title)")
+    extra = (args.extra_description or "").strip()
+    if extra:
+        desc = f"{desc.rstrip()}\n\n{extra}" if desc.strip() else extra
     return title, desc
 
 
@@ -104,6 +107,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--in", dest="video", required=True, help="video file to upload")
     p.add_argument("--title", help="explicit title (else from --script-json)")
     p.add_argument("--description", help="explicit description (else from --script-json)")
+    p.add_argument("--extra-description", default="",
+                   help="text appended to the description (e.g. BGM attribution)")
     p.add_argument("--script-json", help="JSON with youtube.title/description")
     p.add_argument("--privacy", choices=["private", "unlisted", "public"], default="private")
     p.add_argument("--channel-url", default="https://studio.youtube.com/channel/UCkYZel8a-aj1BJdj6pYDr5w",

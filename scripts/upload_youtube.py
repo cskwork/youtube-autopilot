@@ -53,6 +53,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--script-json", help="JSON with youtube.title/description/tags/category")
     parser.add_argument("--title", help="explicit title (overrides script JSON)")
     parser.add_argument("--description", help="explicit description (overrides script JSON)")
+    parser.add_argument("--extra-description", default="",
+                        help="text appended to the description (e.g. BGM attribution)")
     parser.add_argument("--tags", help="explicit comma-separated tags (overrides script JSON)")
     parser.add_argument("--category", help="explicit numeric category id (overrides script JSON)")
     parser.add_argument(
@@ -96,6 +98,15 @@ def _coerce_tags(raw: object) -> list[str]:
     return [t.strip() for t in items if t.strip()]
 
 
+def _append_extra(description: str, extra: str) -> str:
+    """Append extra text (e.g. BGM attribution) to a description, blank-line separated."""
+    extra = (extra or "").strip()
+    if not extra:
+        return description
+    base = (description or "").rstrip()
+    return f"{base}\n\n{extra}" if base else extra
+
+
 def resolve_metadata(args: argparse.Namespace) -> VideoMetadata:
     """Merge explicit flags over script JSON into a validated VideoMetadata."""
     meta = load_script_meta(Path(args.script_json).expanduser() if args.script_json else None)
@@ -103,6 +114,7 @@ def resolve_metadata(args: argparse.Namespace) -> VideoMetadata:
     if not title:
         raise SystemExit("title is required (via --title or script JSON youtube.title)")
     description = args.description if args.description is not None else str(meta.get("description", ""))
+    description = _append_extra(description, args.extra_description)
     tags = _coerce_tags(args.tags) if args.tags is not None else _coerce_tags(meta.get("tags"))
     category = args.category or str(meta.get("category", "") or "").strip() or DEFAULT_CATEGORY
     if not category.isdigit():

@@ -99,9 +99,23 @@ subprocesses, threading each stage's output into the next and writing a
    1280x720 Flow clips the watermark sits at ~(1140,645), so `--box
    1095:600:160:100` is a tight fit. (`assemble_flow_video.py` does this inline.)
    Output: `delogo.mp4`.
-6. **Narration** (`add_narration.py`): Supertonic Korean TTS (default F1/Mina,
-   speed 0.95, steps 16, lang ko) synthesizes the voice and ffmpeg muxes it.
-   Output: `narrated.mp4`.
+6. **Narration + music + captions** (`add_narration.py`): Supertonic Korean TTS
+   (default F1/Mina, speed 0.95, steps 16, lang ko) synthesizes the voice
+   ONE SENTENCE AT A TIME, ffprobes each duration for drift-free timing, and
+   concatenates them into the full narration WAV. A low-volume (~0.16)
+   royalty-free background track is laid under it with `afade` in/out and
+   sidechain DUCKING (on by default), via three cohesive sibling modules:
+   `subtitles.py` (segmentation + per-sentence timing + `.srt`/`.ass`),
+   `bgm_library.py` (resolve one track by mood), `audio_mix.py` (pure ffmpeg
+   mix graph). Only the KEY sentences (from `script.json` `key_sentences`, else
+   a sparse heuristic) are burned in as bottom-centered captions at exact times
+   (forces a libx264 re-encode). BGM is ALWAYS present: if the optional
+   `JAMENDO_CLIENT_ID` env key is unset or the network/track is unusable, a
+   synthesized ambient pad (CC0, ffmpeg `lavfi`) is used. Only CC-BY/CC-BY-SA/CC0
+   tracks are accepted; when a track requires credit, attribution is written to
+   `CREDITS.txt` beside the video and threaded into the upload description.
+   `--no-bgm`/`--no-subtitles` restore the prior single-shot, music-free path.
+   Output: `narrated.mp4` (+ `captions.srt`/`captions.ass`, optional `CREDITS.txt`).
 7. **Upload** — two paths, same private-draft outcome:
    - `upload_youtube.py`: YouTube Data API v3 resumable upload, metadata from
      `script.json`. Needs an OAuth Desktop client whose consent screen lists the
@@ -117,8 +131,17 @@ in YouTube Studio and flip it private -> public once reviewed.
 
 <requirements>
 - Python 3.12 with `pip install -r requirements.txt` (google-api-python-client,
-  google-auth-oauthlib, google-auth-httplib2, pillow).
+  google-auth-oauthlib, google-auth-httplib2, pillow). Stage 6 BGM/subtitles add
+  NO pip deps — they use only the Python stdlib (urllib) plus ffmpeg.
 - `ffmpeg` and `ffprobe` on PATH (delogo, mux, duration, dry-run placeholder).
+  Stage 6 additionally needs ffmpeg built with **libass** (the `ass`/`subtitles`
+  filter, for burned captions) and the `sidechaincompress`, `afade`, and
+  `amix` filters plus the `-stream_loop -1` input flag (the BGM bed loops via
+  `-stream_loop -1` and is trimmed by `amix duration=first`, not `aloop`) —
+  all present in stock ffmpeg 7.x.
+- Optional `JAMENDO_CLIENT_ID` env var enables fresh per-run royalty-free BGM
+  from Jamendo (CC-BY/CC-BY-SA/CC0 only). Absent/offline -> a synthesized CC0
+  ambient pad guarantees BGM. Never hardcode the key; it is read from the env.
 - `codex` CLI logged in via ChatGPT (`codex login status` => "Logged in using
   ChatGPT"); needs the `image_generation` entitlement for storyboards.
 - Chrome with remote debugging, logged into the target Google account with
@@ -160,7 +183,14 @@ in YouTube Studio and flip it private -> public once reviewed.
 - `scripts/build_slideshow.py` — Flow-free fallback: narrated Ken-Burns video
   from the storyboard stills.
 - `scripts/remove_logo.py` — Stage 5: ffmpeg `delogo` watermark removal.
-- `scripts/add_narration.py` — Stage 6: Supertonic Korean TTS + ffmpeg mux.
+- `scripts/add_narration.py` — Stage 6 conductor: per-sentence Supertonic TTS +
+  low BGM bed + ducking + selective burned key captions + ffmpeg mux.
+- `scripts/subtitles.py` — Stage 6: Korean sentence split, per-sentence TTS
+  timing, WAV concat, key-sentence selection, `.srt`/`.ass` builders, burn `-vf`.
+- `scripts/bgm_library.py` — Stage 6: resolve one royalty-free track per run
+  (explicit > cache > Jamendo > synth pad); license filter + attribution.
+- `scripts/audio_mix.py` — Stage 6: pure ffmpeg mix-graph builder + runner
+  (narration + low BGM bed + optional original audio + optional ducking).
 - `scripts/upload_youtube.py` — Stage 7a: private YouTube Data API upload.
 - `scripts/upload_youtube_studio.py` — Stage 7b: private upload by driving the
   Studio browser (no OAuth; proven path).
@@ -171,6 +201,11 @@ in YouTube Studio and flip it private -> public once reviewed.
 - `references/runbook.md` — per-stage operational + debug guide.
 - `references/improvement_log.md` — living log of selector/prompt/failure fixes.
 - `tests/test_remove_logo.py` — delogo box geometry unit tests.
+- `tests/test_audio_mix.py` — pure BGM mix-graph builder assertions.
+- `tests/test_subtitles.py` — Korean split, timing, key selection, caption files.
+- `tests/test_bgm_library.py` — BGM resolution order + license filter (mocked).
+- `tests/test_add_narration_integration.py` — offline Stage 6 end-to-end (stub
+  TTS, real ffmpeg): asserts audio stream, duration, captions, CREDITS handling.
 </files>
 
 <validation>
