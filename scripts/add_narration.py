@@ -37,6 +37,7 @@ def _load_sibling(name: str):
 audio_mix = _load_sibling("audio_mix")
 subtitles = _load_sibling("subtitles")
 bgm_library = _load_sibling("bgm_library")
+stage_gates = _load_sibling("stage_gates")
 
 VOICE_NAMES = {
     "F1": "Mina", "F2": "Sora", "F3": "Yuna",
@@ -78,9 +79,13 @@ def _add_bgm_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--bgm-mood", default="", help="BGM mood/genre keywords override")
     parser.add_argument("--bgm-volume", type=float, default=0.16, help="BGM gain (default 0.16)")
     parser.add_argument("--no-bgm", dest="bgm_on", action="store_false", help="disable BGM")
+    parser.add_argument("--allow-synth-bgm", dest="allow_synth_bgm", action="store_true",
+                        help="permit the synthesized CC0 ambient-pad fallback when no real "
+                             "BGM source resolves; without it a BGM-on run hard-stops rather "
+                             "than silently degrading to synth (real generation by default)")
     parser.add_argument("--duck", dest="duck", action="store_true", help="sidechain ducking (default on)")
     parser.add_argument("--no-duck", dest="duck", action="store_false", help="disable sidechain ducking")
-    parser.set_defaults(bgm_on=True, duck=True)
+    parser.set_defaults(bgm_on=True, duck=True, allow_synth_bgm=False)
 
 
 def _add_caption_args(parser: argparse.ArgumentParser) -> None:
@@ -211,11 +216,17 @@ def write_captions(segments, key_idx, out_dir: Path) -> dict[str, object]:
 # --- BGM ---------------------------------------------------------------------
 
 def resolve_bgm(args: argparse.Namespace, mood: str, narration_wav: Path, work_dir: Path):
-    """Resolve one royalty-free track for the mood (synth fallback guarantees one)."""
+    """Resolve one royalty-free track for the mood.
+
+    Returns ``None`` when no REAL source resolves and ``--allow-synth-bgm`` is
+    not set, so the conductor can hard-stop instead of silently degrading to the
+    synthesized pad.
+    """
     duration = audio_mix.media_duration(narration_wav)
     return bgm_library.resolve(
         mood, explicit_path=args.bgm, cache_dir=DEFAULT_BGM_CACHE,
         duration=duration, work_dir=work_dir / "bgm",
+        allow_synth=args.allow_synth_bgm,
     )
 
 
@@ -294,8 +305,21 @@ def conduct(args: argparse.Namespace, src: Path, out: Path) -> int:
             mood = resolve_mood(args, fields)
             log(f"[bgm] mood={mood!r}")
             bgm = resolve_bgm(args, mood, narration, work)
+            if bgm is None:
+                raise SystemExit(
+                    f"no real BGM resolved for mood={mood!r}; pass --bgm <track>, set "
+                    "JAMENDO_CLIENT_ID, add --allow-synth-bgm to permit the synth pad, "
+                    "or --no-bgm to run narration only"
+                )
         audio = build_audio_track(args, narration, src, bgm, work)
         out_path = mux_final(src, audio, out, burn_ass)
+    # Self-verify: refuse to report success on a silent/empty narration track.
+    # A low duration floor here only guards emptiness; the orchestrator applies
+    # the full duration gate. This is what makes "audio gen must pass" real.
+    try:
+        stage_gates.gate_narration(out_path, label="add_narration", min_duration=0.3)
+    except stage_gates.GateError as exc:
+        raise SystemExit(f"narration output failed verification: {exc}") from exc
     credits = write_credits(out_path, bgm)
     emit({
         "ok": True, "out": str(out_path), "tts": True, "voice": args.voice,

@@ -25,12 +25,26 @@ calls upload_youtube.py with --dry-run so nothing is uploaded.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+
+
+def _load_sibling(name: str):
+    """Import a sibling scripts/ module by path (cwd-independent)."""
+    spec = importlib.util.spec_from_file_location(name, HERE / f"{name}.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+stage_gates = _load_sibling("stage_gates")
 
 DEFAULT_OUT_DIR = (
     "/Users/danny/Documents/PARA/Resource/autoresearch/ViMax/"
@@ -57,6 +71,22 @@ def stage_header(index: int, total: int, name: str) -> None:
     """Print a clear per-stage progress banner to stderr."""
     log("")
     log(f"=== [{index}/{total}] {name} " + "=" * max(0, 48 - len(name)))
+
+
+def gate(stage: str, check) -> dict:
+    """Run a stage_gates verification, hard-stopping the pipeline on failure.
+
+    ``check`` is a zero-arg callable that runs the relevant gate and returns its
+    info dict. A failed gate (degraded/missing/silent artifact) becomes a clear
+    SystemExit so the chain NEVER carries a broken artifact to the next stage or
+    to upload — this is what enforces "each stage must pass".
+    """
+    try:
+        info = check()
+    except stage_gates.GateError as exc:
+        raise SystemExit(f"GATE FAILED after '{stage}': {exc}") from exc
+    log(f"[gate] {stage} OK: {info}")
+    return info
 
 
 # --- subprocess stage runner -------------------------------------------------
@@ -267,6 +297,8 @@ def stage_narration(args: argparse.Namespace, delogo: Path, script: Path, paths:
         cmd.append("--no-bgm")
     if args.no_subtitles:
         cmd.append("--no-subtitles")
+    if args.allow_synth_bgm:
+        cmd.append("--allow-synth-bgm")
     if args.bgm:
         cmd += ["--bgm", str(Path(args.bgm).expanduser().resolve())]
     return run_stage("add_narration", cmd)
@@ -404,6 +436,12 @@ def _add_pipeline_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no-bgm", action="store_true", help="Stage 6: disable background music")
     parser.add_argument("--no-subtitles", action="store_true", help="Stage 6: disable key-sentence captions")
     parser.add_argument("--bgm", help="Stage 6: explicit BGM track path (overrides mood resolution)")
+    parser.add_argument(
+        "--allow-synth-bgm", action="store_true",
+        help="Stage 6: permit the synthesized CC0 ambient pad fallback when no real "
+             "BGM source resolves; without it, BGM-on runs hard-stop instead of "
+             "silently degrading to synth (real generation by default)",
+    )
 
 
 def _add_upload_args(parser: argparse.ArgumentParser) -> None:
@@ -449,25 +487,31 @@ def run_pipeline(args: argparse.Namespace, paths: dict[str, Path]) -> dict:
     total = 7
     stage_header(1, total, "harvest_ideas")
     ideas = stage_harvest(args, paths)
+    gate("harvest_ideas", lambda: stage_gates.gate_ideas(ideas, min_count=args.idea_index + 1))
     idea = select_idea(ideas, args.idea_index)
     idea_file = write_idea_file(idea, paths["idea"])
     log(f"[idea] chosen: {idea.get('title', '')!r}")
 
     stage_header(2, total, "make_storyboard")
     storyboard_dir = stage_storyboard(args, ideas, paths)
+    gate("make_storyboard", lambda: stage_gates.gate_storyboard(storyboard_dir, min_scenes=1))
 
     stage_header(3, total, "write_script")
     script = stage_script(args, idea_file, paths)
+    gate("write_script", lambda: stage_gates.gate_script(script))
 
     stage_header(4, total, "generate_video")
     raw = stage_video(args, script, paths)
+    gate("generate_video", lambda: stage_gates.gate_video(raw, label="raw_video"))
 
     stage_header(5, total, "remove_logo")
     delogo = stage_delogo(raw, paths)
+    gate("remove_logo", lambda: stage_gates.gate_video(paths["delogo_video"], label="delogo"))
 
     stage_header(6, total, "add_narration")
     narration = stage_narration(args, paths["delogo_video"], script, paths)
     final_video = Path(narration["out"]).resolve()
+    gate("add_narration", lambda: stage_gates.gate_narration(final_video))
 
     stage_header(7, total, "upload_youtube")
     upload = stage_upload(args, final_video, script, _bgm_attribution(narration))
