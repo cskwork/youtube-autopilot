@@ -146,13 +146,16 @@ def _video_sources(status: dict | None) -> set[str]:
 def _new_video_src(status: dict | None, previous_sources: set[str]) -> str:
     if not status:
         return ""
-    sources = status.get("video_srcs") or []
-    if status.get("src"):
-        sources = [*sources, status["src"]]
-    for src in reversed(sources):
+    # Flow lists clips NEWEST-FIRST, so the just-rendered clip is the FIRST
+    # source that was not already present before this submit. The old code
+    # iterated reversed() (oldest-first) and trusted status['src'], so on a
+    # project with pre-existing clips it grabbed a STALE/older tile instead of
+    # the new render (the businessman-instead-of-the-prompt bug).
+    for src in status.get("video_srcs") or []:
         if src and src not in previous_sources:
             return src
-    return ""
+    src = status.get("src")
+    return src if src and src not in previous_sources else ""
 
 
 def _video_ready(status: dict, previous_sources: set[str] | None = None) -> bool:
