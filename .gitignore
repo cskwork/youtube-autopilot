@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Tooling / session state (not part of the skill)
+.omx/
+.DS_Store
+
+# Generated run artifacts (videos, narration, ideas, storyboards)
+.working_dir/
+*.mp4
+*.wav
+
+# OAuth tokens / secrets — never commit
+token.json
+client_secret*.json
