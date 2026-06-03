@@ -190,3 +190,20 @@ def test_no_bgm_runs_narration_only_without_flag(tmp_path):
     assert out.is_file()
     assert _probe(out, "stream=codec_type", "a:0") == "audio"
     assert result["bgm"] is None
+
+
+def test_video_freeze_padded_to_full_narration_not_truncated(tmp_path):
+    """Bug fix: the FULL narration must play even when the clip is shorter.
+
+    The stub TTS emits ~1.0s per sentence, so the 3-sentence script yields a
+    ~3.0s narration, while the placeholder video is only 2.0s. Before the fix,
+    mux_final's -shortest truncated the output to the 2s clip, cutting the
+    voiceover off mid-sentence. The fix freeze-pads the video to the narration
+    length, so the output spans the whole narration (~3.0s), not the clip (~2.0s).
+    """
+    result = _run_add_narration(tmp_path, ["--no-bgm"])
+    out = Path(result["out"])
+    dur = float(_probe(out, "format=duration"))
+    assert dur >= 2.9, f"narration truncated to {dur:.2f}s (clip length); expected ~3.0s"
+    # the audio (the actual voiceover) is fully present, not silent
+    assert _probe(out, "stream=codec_type", "a:0") == "audio"

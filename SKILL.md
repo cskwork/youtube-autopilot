@@ -135,6 +135,13 @@ reaches the next stage and never uploads. See `<gates>` below.
    tracks are accepted; when a track requires credit, attribution is written to
    `CREDITS.txt` beside the video and threaded into the upload description.
    `--no-bgm`/`--no-subtitles` restore the prior single-shot, music-free path.
+   The final mux FREEZE-PADS the video (holds the last frame via ffmpeg `tpad`)
+   up to the narration length, so a clip shorter than the voiceover (an ~8s Flow
+   clip vs a ~15s narration) is never truncated mid-sentence; the output length
+   equals the narration. The pad is applied BEFORE the caption burn so cues over
+   the held tail still render. (For motion across the whole runtime instead of a
+   held tail, generate one clip per scene and `assemble_flow_video.py` stretches
+   them to the narration with `setpts`.)
    Output: `narrated.mp4` (+ `captions.srt`/`captions.ass`, optional `CREDITS.txt`).
 7. **Upload** — two paths, same private-draft outcome:
    - `upload_youtube.py`: YouTube Data API v3 resumable upload, metadata from
