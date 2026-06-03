@@ -1,3 +1,7 @@
+# Python pip dependencies. Stage 6 BGM + subtitles add NO new pip deps — they
+# use only the stdlib (urllib) plus external CLIs: ffmpeg (built with libass +
+# sidechaincompress/aloop/afade/amix) and node/npx for Supertonic TTS. Optional
+# JAMENDO_CLIENT_ID env var enables fresh royalty-free BGM (synth pad otherwise).
 pillow
 google-api-python-client
 google-auth-oauthlib
