@@ -29,6 +29,7 @@ before/after intent and the observed quality delta.
 
 - 2026-06-03 — Storyboard character consistency: a fixed style suffix plus an explicit "same main character / palette / world" clause in every scene image prompt kept the same person, outfit, and kitchen across scenes 1-3 (verified on real gen.sh output). Carry the same character description into each Flow `scene_prompts[i]` so the motion clips stay consistent too.
 - 2026-06-03 — Title for reach: codex's literal title is fine, but a curiosity-gap hook ("아침에 휴대폰부터 보지 마세요 (집중력 3분 리셋)") reads more clickable. Consider asking codex for 3 viral title variants and picking one.
+- 2026-06-03 — Stage 6 now emits `bgm_mood` (short English keywords) + `key_sentences` (2-4 verbatim narration sentences) from `write_script.py`. `bgm_mood` drives the music search; `key_sentences` drive the selective burned captions. Old `script.json` without these fields still runs: mood derives from youtube tags+title (else "calm ambient"), key sentences fall back to a sparse first+every-3rd heuristic.
 
 ---
 
@@ -43,6 +44,7 @@ feed), OAuth `invalid_grant`, Data API `quotaExceeded`, delogo box drift.
 - 2026-06-03 — CDP attach failed on Chrome 148: `--remote-debugging-port` is ignored on the default profile. Fix: enable chrome://inspect "Allow remote debugging for this browser instance", then `attach --cdp=chrome`. The new endpoint omits `/json/*` HTTP discovery but Playwright still connects.
 - 2026-06-03 — Flow poll hung at `dur:0, videos>=1`: Flow `<video>` tiles load lazily (readyState 0, duration 0) until activated. Fix: `flow_status.js` now `load()`s each video and waits for `loadedmetadata` before reading duration, so finished clips are detected and auto-downloaded. The `media.getMediaUrlRedirect` URL also only resolves quickly after the clip is played/loaded.
 - 2026-06-03 — Account split blocks the Data API path: the channel (@공유-e4p, sharepoint889) is a different Google account than the GCP project (jarvis-mymac, csk917work), and the project's auth platform was unconfigured. Workaround: upload via the Studio browser (`upload_youtube_studio.py`). Flow video access was also missing on the channel account — generate under a Flow-enabled account/project and upload the resulting MP4.
+- 2026-06-03 — Stage 6 BGM + selective subtitles added (`subtitles.py`, `bgm_library.py`, `audio_mix.py`; conductor `add_narration.py`). BGM is always present: Jamendo (CC-BY/CC-BY-SA/CC0 only, `JAMENDO_CLIENT_ID` env) with a CC0 synth-pad fallback so no-network/no-key runs never fail. Low gain (~0.16) + sidechain ducking (`threshold=0.03:ratio=8:attack=20:release=300`) keeps narration clearly audible; `amix ...:normalize=0` stops auto-attenuation. Captions are drift-free because each sentence is synthesized separately, ffprobed, and the SAME WAVs are concatenated for the muxed audio. Burning the ASS forces a libx264 re-encode (matches existing delogo/assemble re-encodes). Attribution (when required) -> `CREDITS.txt` + `--extra-description` on the uploaders.
 
 ---
 

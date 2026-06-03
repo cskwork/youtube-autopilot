@@ -12,6 +12,10 @@ __pycache__/
 *.mp4
 *.wav
 
+# Downloaded / cached BGM tracks (never commit audio); keep the dir via .gitkeep
+references/bgm_cache/*
+!references/bgm_cache/.gitkeep
+
 # OAuth tokens / secrets — never commit
 token.json
 client_secret*.json
