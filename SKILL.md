@@ -35,6 +35,16 @@ Chrome session via the Playwright agent CLI. Proven setup (Chrome 148, macOS):
    session — the #1 silent failure (scrapes return parse errors).
 5. `run-code` runs `page => ...` in NODE context; DOM scraping must live inside
    `page.evaluate(() => {...})`, and `process` is unavailable in that sandbox.
+6. AGENT APPROVAL REQUIRED. Every browser stage shells out to
+   `npx @playwright/cli@latest` (an external package), and the attach + upload is
+   an outward-facing, credit-spending, hard-to-reverse action. In an agent
+   harness (e.g. Claude Code) the auto-permission classifier BLOCKS this by
+   default, so a live run cannot proceed unattended — the human MUST explicitly
+   approve it. A one-time attach approval is NOT enough: harvest, Flow video, and
+   Studio upload each re-invoke the CLI, so grant a standing allow rule for
+   `npx @playwright/cli@latest *` (or run the attach yourself via the shell `!`
+   prefix and approve each subsequent stage). Treat this as a deliberate human
+   gate before any real credit spend or upload, never a step to work around.
 </browser_attach>
 
 <quick_start>
@@ -196,6 +206,11 @@ per-gate `min_duration` / `min_bytes` args.
   only human step is flipping the draft to public in YouTube Studio.
 - Each fresh Flow submit and each codex call may spend credits/tokens; prefer
   `--dry-run` to validate the chain before a real run.
+- Human approval gate (live runs): the browser stages run `npx @playwright/cli`,
+  an external package, and the attach/upload spends credits and is hard to
+  reverse, so an agent harness will (and should) require explicit user approval
+  before the live run. Grant a standing allow rule for the playwright CLI; do not
+  bypass the gate. See `<browser_attach>` point 6.
 - Secrets (OAuth client secret, token) come only from CLI args / files; nothing
   is hardcoded. The uploader never prints token/secret contents.
 - Studio uses Shadow DOM + virtualized lists and Flow's DOM drifts; the scraper
