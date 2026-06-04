@@ -81,6 +81,7 @@
     padding: 11px 18px; border-radius: 10px; font-weight: 600; font-size: 14px;
     border: 1px solid var(--line); color: var(--text);
     transition: transform .15s ease, border-color .2s ease, background .2s ease;
+    cursor: pointer; background: transparent; font-family: inherit;
   }
   .btn:hover { transform: translateY(-1px); border-color: #3a4060; }
   .btn-primary {
@@ -89,6 +90,7 @@
     box-shadow: 0 8px 28px -8px var(--glow);
   }
   .btn-primary:hover { box-shadow: 0 12px 34px -8px var(--glow); }
+  .lang-toggle { padding: 9px 14px; font-size: 13px; min-width: 64px; justify-content: center; }
 
   /* hero */
   header.hero { padding: 92px 0 64px; }
@@ -231,20 +233,21 @@
   <div class="wrap row">
     <a class="brand" href="#top"><span class="dot"></span> youtube-autopilot</a>
     <div class="nav-links">
-      <a href="#pipeline">Pipeline</a>
-      <a href="#features">Features</a>
-      <a href="#commercial">Commercial</a>
-      <a href="#start">Quick start</a>
-      <a class="btn btn-primary" href="https://github.com/cskwork/youtube-autopilot">View on GitHub</a>
+      <a href="#pipeline" data-i18n="nav.pipeline">Pipeline</a>
+      <a href="#features" data-i18n="nav.features">Features</a>
+      <a href="#commercial" data-i18n="nav.commercial">Commercial</a>
+      <a href="#start" data-i18n="nav.start">Quick start</a>
+      <button id="langToggle" class="btn lang-toggle" type="button" aria-label="한국어로 전환">한국어</button>
+      <a class="btn btn-primary" href="https://github.com/cskwork/youtube-autopilot" data-i18n="nav.github">View on GitHub</a>
     </div>
   </div>
 </nav>
 
 <header class="hero" id="top">
   <div class="wrap">
-    <span class="badge"><span class="pulse"></span> Proven end-to-end on a live channel — 2026-06-03</span>
-    <h1>Idea to a private<br/><span class="grad">YouTube draft</span>, in one command.</h1>
-    <p class="lede">
+    <span class="badge" data-i18n="hero.badge"><span class="pulse"></span> Proven end-to-end on a live channel — 2026-06-03</span>
+    <h1 data-i18n="hero.h1">Idea to a private<br/><span class="grad">YouTube draft</span>, in one command.</h1>
+    <p class="lede" data-i18n="hero.lede">
       An unattended pipeline that harvests a trending idea, storyboards it, renders
       motion clips with Google Flow, strips the watermark, narrates it in Korean,
       and uploads it as a private draft. The only human step left is hitting publish.
@@ -252,20 +255,20 @@
       turns real product screens into a 30-second vertical app ad with the same engine.
     </p>
     <div class="cta">
-      <a class="btn btn-primary" href="#start">Get started</a>
-      <a class="btn" href="#pipeline">See the pipeline</a>
+      <a class="btn btn-primary" href="#start" data-i18n="cta.start">Get started</a>
+      <a class="btn" href="#pipeline" data-i18n="cta.pipeline">See the pipeline</a>
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="n">7</div><div class="l">Composable stages</div></div>
-      <div class="stat"><div class="n">1</div><div class="l">Command to run</div></div>
-      <div class="stat"><div class="n">2</div><div class="l">Output modes</div></div>
-      <div class="stat"><div class="n">0</div><div class="l">Hardcoded secrets</div></div>
+      <div class="stat"><div class="n">7</div><div class="l" data-i18n="stat.stages">Composable stages</div></div>
+      <div class="stat"><div class="n">1</div><div class="l" data-i18n="stat.command">Command to run</div></div>
+      <div class="stat"><div class="n">2</div><div class="l" data-i18n="stat.modes">Output modes</div></div>
+      <div class="stat"><div class="n">0</div><div class="l" data-i18n="stat.secrets">Hardcoded secrets</div></div>
     </div>
 
     <div class="cmd">
       <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="t mono">bash</span></div>
-<pre class="mono"><span class="tok-cmt"># One command runs the whole pipeline and stops at the private draft</span>
+<pre class="mono"><span class="tok-cmt" data-i18n="cmd.hero.cmt"># One command runs the whole pipeline and stops at the private draft</span>
 <span class="tok-cmd">python3</span> scripts/auto_youtube_pipeline.py \
   <span class="tok-flag">--topic</span> <span class="tok-str">"초보자를 위한 홈카페 레시피"</span> \
   <span class="tok-flag">--scenes</span> 6 \
@@ -281,24 +284,24 @@
 <section id="pipeline">
   <div class="wrap">
     <div class="sec-head">
-      <span class="eyebrow">How it works</span>
-      <h2>Seven small CLIs, one chain.</h2>
-      <p>Each stage runs standalone with the same contract — one JSON line on
+      <span class="eyebrow" data-i18n="sec.how">How it works</span>
+      <h2 data-i18n="pipe.h2">Seven small CLIs, one chain.</h2>
+      <p data-i18n="pipe.p">Each stage runs standalone with the same contract — one JSON line on
         stdout, logs on stderr — or all seven run from the orchestrator.</p>
     </div>
 
-    <div class="pipe-arrows">
+    <div class="pipe-arrows" data-i18n="pipe.arrows">
       <b>Studio inspiration</b> &rarr; codex storyboard &rarr; Google Flow video &rarr; delogo &rarr; Supertonic Korean TTS &rarr; <b>private draft</b>
     </div>
 
     <div class="pipe">
-      <div class="step"><div class="num">1</div><h4>Harvest</h4><p>Scrape the Studio inspiration feed, rank ideas with codex. Trending fallback.</p></div>
-      <div class="step"><div class="num">2</div><h4>Storyboard</h4><p>Expand the idea into N scenes and render a PNG per scene.</p></div>
-      <div class="step"><div class="num">3</div><h4>Script</h4><p>Korean narration, Flow prompts, and YouTube metadata as strict JSON.</p></div>
-      <div class="step"><div class="num">4</div><h4>Video</h4><p>One Flow clip per scene, then concat, fit, and mux into one MP4.</p></div>
-      <div class="step"><div class="num">5</div><h4>Delogo</h4><p>ffmpeg wipes the bottom-right Gemini/Flow sparkle watermark.</p></div>
-      <div class="step"><div class="num">6</div><h4>Narration</h4><p>Supertonic Korean TTS synthesizes the voice and muxes it in.</p></div>
-      <div class="step"><div class="num">7</div><h4>Upload</h4><p>Private draft via the Studio browser (no OAuth) or the Data API.</p></div>
+      <div class="step"><div class="num">1</div><h4 data-i18n="step1.h">Harvest</h4><p data-i18n="step1.p">Scrape the Studio inspiration feed, rank ideas with codex. Trending fallback.</p></div>
+      <div class="step"><div class="num">2</div><h4 data-i18n="step2.h">Storyboard</h4><p data-i18n="step2.p">Expand the idea into N scenes and render a PNG per scene.</p></div>
+      <div class="step"><div class="num">3</div><h4 data-i18n="step3.h">Script</h4><p data-i18n="step3.p">Korean narration, Flow prompts, and YouTube metadata as strict JSON.</p></div>
+      <div class="step"><div class="num">4</div><h4 data-i18n="step4.h">Video</h4><p data-i18n="step4.p">One Flow clip per scene, then concat, fit, and mux into one MP4.</p></div>
+      <div class="step"><div class="num">5</div><h4 data-i18n="step5.h">Delogo</h4><p data-i18n="step5.p">ffmpeg wipes the bottom-right Gemini/Flow sparkle watermark.</p></div>
+      <div class="step"><div class="num">6</div><h4 data-i18n="step6.h">Narration</h4><p data-i18n="step6.p">Supertonic Korean TTS synthesizes the voice and muxes it in.</p></div>
+      <div class="step"><div class="num">7</div><h4 data-i18n="step7.h">Upload</h4><p data-i18n="step7.p">Private draft via the Studio browser (no OAuth) or the Data API.</p></div>
     </div>
   </div>
 </section>
@@ -306,47 +309,47 @@
 <section id="features">
   <div class="wrap">
     <div class="sec-head">
-      <span class="eyebrow">Why it holds up</span>
-      <h2>Built for real channels, not a happy path.</h2>
-      <p>Accounts split, entitlements differ, and DOMs drift. Every stage has a
+      <span class="eyebrow" data-i18n="feat.eyebrow">Why it holds up</span>
+      <h2 data-i18n="feat.h2">Built for real channels, not a happy path.</h2>
+      <p data-i18n="feat.p">Accounts split, entitlements differ, and DOMs drift. Every stage has a
         proven fallback and a safe default.</p>
     </div>
 
     <div class="grid">
       <div class="card">
         <div class="ic mono">{ }</div>
-        <h3>Composable contracts</h3>
-        <p>Every stage prints exactly one <code>{"ok": true, …}</code> line and logs to stderr — pipe it, skip it, or re-run a single stage.</p>
+        <h3 data-i18n="card1.h">Composable contracts</h3>
+        <p data-i18n="card1.p">Every stage prints exactly one <code>{"ok": true, …}</code> line and logs to stderr — pipe it, skip it, or re-run a single stage.</p>
         <span class="tag mono">--skip-harvest · --skip-video</span>
       </div>
       <div class="card">
         <div class="ic">&#9210;</div>
-        <h3>Dry-run first</h3>
-        <p>Validate the entire chain without spending Flow credits or touching your channel. A placeholder clip stands in for the real render.</p>
+        <h3 data-i18n="card2.h">Dry-run first</h3>
+        <p data-i18n="card2.p">Validate the entire chain without spending Flow credits or touching your channel. A placeholder clip stands in for the real render.</p>
         <span class="tag mono">--dry-run</span>
       </div>
       <div class="card">
         <div class="ic">&#9737;</div>
-        <h3>Flow-free fallback</h3>
-        <p>No Flow access on the channel account? A narrated Ken-Burns slideshow renders from the storyboard stills. No credits, no browser.</p>
+        <h3 data-i18n="card3.h">Flow-free fallback</h3>
+        <p data-i18n="card3.p">No Flow access on the channel account? A narrated Ken-Burns slideshow renders from the storyboard stills. No credits, no browser.</p>
         <span class="tag mono">build_slideshow.py</span>
       </div>
       <div class="card">
         <div class="ic">&#8682;</div>
-        <h3>OAuth-free upload</h3>
-        <p>When the channel and GCP project accounts differ, upload by driving the logged-in Studio browser instead of the Data API.</p>
+        <h3 data-i18n="card4.h">OAuth-free upload</h3>
+        <p data-i18n="card4.p">When the channel and GCP project accounts differ, upload by driving the logged-in Studio browser instead of the Data API.</p>
         <span class="tag mono">upload_youtube_studio.py</span>
       </div>
       <div class="card">
         <div class="ic">&#9888;</div>
-        <h3>Resilient scraping</h3>
-        <p>Studio's Shadow DOM and virtualized lists are pierced and retried; Flow's drifting DOM is handled, with a trending fallback.</p>
+        <h3 data-i18n="card5.h">Resilient scraping</h3>
+        <p data-i18n="card5.p">Studio's Shadow DOM and virtualized lists are pierced and retried; Flow's drifting DOM is handled, with a trending fallback.</p>
         <span class="tag mono">render-retry loop</span>
       </div>
       <div class="card">
         <div class="ic">&#128274;</div>
-        <h3>Secrets stay out</h3>
-        <p>OAuth secrets and tokens come only from CLI args and files. Nothing is hardcoded, and the uploader never prints their contents.</p>
+        <h3 data-i18n="card6.h">Secrets stay out</h3>
+        <p data-i18n="card6.p">OAuth secrets and tokens come only from CLI args and files. Nothing is hardcoded, and the uploader never prints their contents.</p>
         <span class="tag mono">private by default</span>
       </div>
     </div>
@@ -357,17 +360,17 @@
   <div class="wrap">
     <div class="callout">
       <div>
-        <span class="eyebrow">The one gate</span>
-        <h2>Unattended, right up to publish.</h2>
-        <p>The pipeline automates everything and then stops. It uploads as a
+        <span class="eyebrow" data-i18n="gate.eyebrow">The one gate</span>
+        <h2 data-i18n="gate.h2">Unattended, right up to publish.</h2>
+        <p data-i18n="gate.p">The pipeline automates everything and then stops. It uploads as a
           private draft and hands you a Studio URL — you review, then flip it
           private to public. Nothing is ever auto-published.</p>
       </div>
       <div class="gate">
-        <div class="g"><span class="ok">auto</span> Harvest, storyboard, script</div>
-        <div class="g"><span class="ok">auto</span> Render, delogo, narrate</div>
-        <div class="g"><span class="ok">auto</span> Upload as private draft</div>
-        <div class="g human"><span class="ok">you</span> Review &amp; publish</div>
+        <div class="g" data-i18n="gate.g1"><span class="ok">auto</span> Harvest, storyboard, script</div>
+        <div class="g" data-i18n="gate.g2"><span class="ok">auto</span> Render, delogo, narrate</div>
+        <div class="g" data-i18n="gate.g3"><span class="ok">auto</span> Upload as private draft</div>
+        <div class="g human" data-i18n="gate.g4"><span class="ok">you</span> Review &amp; publish</div>
       </div>
     </div>
   </div>
@@ -376,19 +379,19 @@
 <section>
   <div class="wrap">
     <div class="sec-head">
-      <span class="eyebrow">Fallbacks</span>
-      <h2>Two splits, handled.</h2>
+      <span class="eyebrow" data-i18n="fb.eyebrow">Fallbacks</span>
+      <h2 data-i18n="fb.h2">Two splits, handled.</h2>
     </div>
     <div class="two">
       <div class="fb">
-        <span class="when mono">when the channel account lacks Flow</span>
-        <h3>Render without Flow</h3>
-        <p><code>build_slideshow.py</code> renders a narrated Ken-Burns video straight from the storyboard stills — no credits, no browser, same downstream chain.</p>
+        <span class="when mono" data-i18n="fb1.when">when the channel account lacks Flow</span>
+        <h3 data-i18n="fb1.h">Render without Flow</h3>
+        <p data-i18n="fb1.p"><code>build_slideshow.py</code> renders a narrated Ken-Burns video straight from the storyboard stills — no credits, no browser, same downstream chain.</p>
       </div>
       <div class="fb">
-        <span class="when mono">when channel ≠ GCP project account</span>
-        <h3>Upload without OAuth</h3>
-        <p><code>upload_youtube_studio.py</code> drives the logged-in Studio browser: set the file, title, description, visibility, and save the private draft.</p>
+        <span class="when mono" data-i18n="fb2.when">when channel ≠ GCP project account</span>
+        <h3 data-i18n="fb2.h">Upload without OAuth</h3>
+        <p data-i18n="fb2.p"><code>upload_youtube_studio.py</code> drives the logged-in Studio browser: set the file, title, description, visibility, and save the private draft.</p>
       </div>
     </div>
   </div>
@@ -397,33 +400,33 @@
 <section id="commercial">
   <div class="wrap">
     <div class="sec-head">
-      <span class="eyebrow">Second output mode</span>
-      <h2>One command, a 30-second app commercial.</h2>
-      <p>The same Flow + Korean-narration engine also renders a vertical app ad —
+      <span class="eyebrow" data-i18n="com.eyebrow">Second output mode</span>
+      <h2 data-i18n="com.h2">One command, a 30-second app commercial.</h2>
+      <p data-i18n="com.p">The same Flow + Korean-narration engine also renders a vertical app ad —
         real product screens stay verbatim, Flow supplies only the cinematic B-roll.</p>
     </div>
 
-    <div class="pipe-arrows" style="margin-top:34px">
+    <div class="pipe-arrows" style="margin-top:34px" data-i18n="com.arrows">
       <b>Product captures</b> &rarr; Google Flow B-roll &rarr; concat &rarr; ducked music &rarr; Supertonic Korean TTS &rarr; <b>1 MP4</b>
     </div>
 
     <div class="grid" style="grid-template-columns:repeat(2,1fr)">
       <div class="card">
         <div class="ic">&#127902;</div>
-        <h3>Faithful product UI</h3>
-        <p>Real app screens are shown verbatim as Ken-Burns motion — never fed through a generative model, so text and layout stay crisp. Flow renders only the surrounding atmosphere.</p>
+        <h3 data-i18n="comA.h">Faithful product UI</h3>
+        <p data-i18n="comA.p">Real app screens are shown verbatim as Ken-Burns motion — never fed through a generative model, so text and layout stay crisp. Flow renders only the surrounding atmosphere.</p>
         <span class="tag mono">generate_commercial.py</span>
       </div>
       <div class="card">
         <div class="ic">&#9835;</div>
-        <h3>Ducked Korean narration</h3>
-        <p>Supertonic Korean TTS over an independent, sidechain-ducked music bed. Flow's source audio is discarded; the bundled SpeakCoach scenes are an editable template.</p>
+        <h3 data-i18n="comB.h">Ducked Korean narration</h3>
+        <p data-i18n="comB.p">Supertonic Korean TTS over an independent, sidechain-ducked music bed. Flow's source audio is discarded; the bundled SpeakCoach scenes are an editable template.</p>
         <span class="tag mono">--run-flow · --flow-clip</span>
       </div>
     </div>
 
     <div class="cmd" style="margin-top:36px">
-      <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="t mono">render a 30s vertical commercial from product captures</span></div>
+      <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="t mono" data-i18n="com.barlabel">render a 30s vertical commercial from product captures</span></div>
 <pre class="mono"><span class="tok-cmd">python3</span> scripts/generate_commercial.py \
   <span class="tok-flag">--capture-dir</span> examples/speakcoach/captures \
   <span class="tok-flag">--transcript-file</span> examples/speakcoach/transcript_ko.txt \
@@ -439,27 +442,27 @@
 <section id="start">
   <div class="wrap">
     <div class="sec-head">
-      <span class="eyebrow">Quick start</span>
-      <h2>Validate, then run for real.</h2>
-      <p>Prove the whole chain with a dry run before spending a single credit.</p>
+      <span class="eyebrow" data-i18n="qs.eyebrow">Quick start</span>
+      <h2 data-i18n="qs.h2">Validate, then run for real.</h2>
+      <p data-i18n="qs.p">Prove the whole chain with a dry run before spending a single credit.</p>
     </div>
 
     <div class="cmd" style="margin-top:36px">
-      <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="t mono">validate the full chain — no Flow credits, no upload</span></div>
+      <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="t mono" data-i18n="qs.barlabel">validate the full chain — no Flow credits, no upload</span></div>
 <pre class="mono"><span class="tok-cmd">python3</span> scripts/auto_youtube_pipeline.py \
   <span class="tok-flag">--topic</span> <span class="tok-str">"테스트 주제"</span> <span class="tok-flag">--dry-run</span> <span class="tok-flag">--video</span> ./sample.mp4
 
-<span class="tok-cmt"># inspect the run manifest</span>
+<span class="tok-cmt" data-i18n="qs.cmt"># inspect the run manifest</span>
 <span class="tok-cmd">cat</span> &lt;out-dir&gt;/manifest.json</pre>
     </div>
 
     <ul class="reqs">
-      <li><span class="m mono">py</span> <span><b>Python 3.12</b> &nbsp; pip install -r requirements.txt</span></li>
-      <li><span class="m mono">av</span> <span><b>ffmpeg + ffprobe</b> on PATH</span></li>
-      <li><span class="m mono">ai</span> <span><b>codex CLI</b> logged in via ChatGPT (image entitlement)</span></li>
-      <li><span class="m mono">br</span> <span><b>Chrome</b> with remote debugging, Studio + Flow access</span></li>
-      <li><span class="m mono">js</span> <span><b>Node 18.3+</b> for Supertonic TTS &amp; Playwright CLI</span></li>
-      <li><span class="m mono">key</span> <span><b>OAuth client secret</b> JSON (Data API path)</span></li>
+      <li data-i18n="req.py"><span class="m mono">py</span> <span><b>Python 3.12</b> &nbsp; pip install -r requirements.txt</span></li>
+      <li data-i18n="req.av"><span class="m mono">av</span> <span><b>ffmpeg + ffprobe</b> on PATH</span></li>
+      <li data-i18n="req.ai"><span class="m mono">ai</span> <span><b>codex CLI</b> logged in via ChatGPT (image entitlement)</span></li>
+      <li data-i18n="req.br"><span class="m mono">br</span> <span><b>Chrome</b> with remote debugging, Studio + Flow access</span></li>
+      <li data-i18n="req.js"><span class="m mono">js</span> <span><b>Node 18.3+</b> for Supertonic TTS &amp; Playwright CLI</span></li>
+      <li data-i18n="req.key"><span class="m mono">key</span> <span><b>OAuth client secret</b> JSON (Data API path)</span></li>
     </ul>
   </div>
 </section>
@@ -469,15 +472,134 @@
     <div class="brand"><span class="dot"></span> youtube-autopilot</div>
     <div>
       <a href="https://github.com/cskwork/youtube-autopilot">GitHub</a> &nbsp;·&nbsp;
-      <a href="#pipeline">Pipeline</a> &nbsp;·&nbsp;
-      <a href="#commercial">Commercial</a> &nbsp;·&nbsp;
+      <a href="#pipeline" data-i18n="nav.pipeline">Pipeline</a> &nbsp;·&nbsp;
+      <a href="#commercial" data-i18n="nav.commercial">Commercial</a> &nbsp;·&nbsp;
       <a href="https://github.com/cskwork/youtube-autopilot/blob/main/LICENSE">MIT License</a>
     </div>
   </div>
-  <div class="wrap" style="margin-top:18px; font-size:13px;">
+  <div class="wrap" style="margin-top:18px; font-size:13px;" data-i18n="foot.tag">
     Idea to private YouTube draft — or a 30s app commercial — in one command. MIT licensed &copy; 2026 cskwork.
   </div>
 </footer>
+
+<script>
+(function () {
+  var KO = {
+    "nav.pipeline": "파이프라인",
+    "nav.features": "특징",
+    "nav.commercial": "커머셜",
+    "nav.start": "빠른 시작",
+    "nav.github": "GitHub에서 보기",
+    "hero.badge": "<span class=\"pulse\"></span> 실제 채널에서 엔드투엔드 검증 완료 — 2026-06-03",
+    "hero.h1": "아이디어에서 비공개<br/><span class=\"grad\">YouTube 초안</span>까지, 명령어 하나로.",
+    "hero.lede": "트렌딩 아이디어를 수집해 스토리보드를 만들고, Google Flow로 모션 클립을 렌더링하고, 워터마크를 제거하고, 한국어 내레이션을 입혀 비공개 초안으로 업로드하는 무인 파이프라인. 남은 사람의 일은 게시 버튼을 누르는 것뿐입니다. 내장 <a href=\"#commercial\" style=\"color:var(--accent-3)\">커머셜 모드</a>는 동일한 엔진으로 실제 제품 화면을 30초 세로형 앱 광고로 만듭니다.",
+    "cta.start": "시작하기",
+    "cta.pipeline": "파이프라인 보기",
+    "stat.stages": "조합형 스테이지",
+    "stat.command": "실행 명령어",
+    "stat.modes": "출력 모드",
+    "stat.secrets": "하드코딩 시크릿",
+    "cmd.hero.cmt": "# 명령어 하나로 전체 파이프라인을 실행하고 비공개 초안에서 멈춥니다",
+    "sec.how": "작동 방식",
+    "pipe.h2": "작은 CLI 일곱 개, 하나의 체인.",
+    "pipe.p": "각 스테이지는 동일한 계약(표준출력에 JSON 한 줄, 로그는 표준에러)으로 단독 실행되거나, 오케스트레이터에서 일곱 개가 함께 실행됩니다.",
+    "pipe.arrows": "<b>Studio 영감</b> &rarr; codex 스토리보드 &rarr; Google Flow 영상 &rarr; delogo &rarr; Supertonic 한국어 TTS &rarr; <b>비공개 초안</b>",
+    "step1.h": "수집",
+    "step1.p": "Studio 영감 피드를 스크랩하고 codex로 아이디어를 순위화. 트렌딩 폴백.",
+    "step2.h": "스토리보드",
+    "step2.p": "아이디어를 N개 장면으로 확장하고 장면당 PNG 한 장을 렌더링.",
+    "step3.h": "스크립트",
+    "step3.p": "한국어 내레이션, Flow 프롬프트, YouTube 메타데이터를 엄격한 JSON으로.",
+    "step4.h": "영상",
+    "step4.p": "장면당 Flow 클립 하나, 이어붙이고 길이를 맞춰 하나의 MP4로 mux.",
+    "step5.h": "Delogo",
+    "step5.p": "ffmpeg가 우하단 Gemini/Flow 반짝임 워터마크를 제거.",
+    "step6.h": "내레이션",
+    "step6.p": "Supertonic 한국어 TTS로 음성을 합성해 영상에 mux.",
+    "step7.h": "업로드",
+    "step7.p": "Studio 브라우저(OAuth 불필요) 또는 Data API로 비공개 초안.",
+    "feat.eyebrow": "왜 견고한가",
+    "feat.h2": "해피 패스가 아닌, 실제 채널을 위한 설계.",
+    "feat.p": "계정이 갈리고, 권한이 다르고, DOM이 바뀝니다. 모든 스테이지에 검증된 폴백과 안전한 기본값이 있습니다.",
+    "card1.h": "조합 가능한 계약",
+    "card1.p": "모든 스테이지가 정확히 <code>{\"ok\": true, …}</code> 한 줄을 출력하고 로그는 표준에러로 — 파이프로 잇고, 건너뛰고, 단일 스테이지만 재실행.",
+    "card2.h": "드라이런 우선",
+    "card2.p": "Flow 크레딧을 쓰거나 채널을 건드리지 않고 전체 체인을 검증. 실제 렌더 대신 플레이스홀더 클립이 들어갑니다.",
+    "card3.h": "Flow 없는 폴백",
+    "card3.p": "채널 계정에 Flow 접근이 없나요? 스토리보드 스틸로 내레이션 켄 번스 슬라이드쇼를 렌더링. 크레딧도, 브라우저도 없이.",
+    "card4.h": "OAuth 없는 업로드",
+    "card4.p": "채널과 GCP 프로젝트 계정이 다를 때, Data API 대신 로그인된 Studio 브라우저를 구동해 업로드.",
+    "card5.h": "견고한 스크래핑",
+    "card5.p": "Studio의 Shadow DOM과 가상화 리스트를 뚫고 재시도하며, 흔들리는 Flow DOM도 처리하고 트렌딩 폴백을 둡니다.",
+    "card6.h": "시크릿은 밖으로",
+    "card6.p": "OAuth 시크릿과 토큰은 CLI 인자와 파일에서만. 하드코딩 없음, 업로더는 그 내용을 출력하지 않습니다.",
+    "gate.eyebrow": "단 하나의 게이트",
+    "gate.h2": "게시 직전까지, 무인으로.",
+    "gate.p": "파이프라인이 모든 것을 자동화한 뒤 멈춥니다. 비공개 초안으로 업로드하고 Studio URL을 건네줍니다 — 검토한 뒤 비공개를 공개로 전환하세요. 무엇도 자동 게시되지 않습니다.",
+    "gate.g1": "<span class=\"ok\">auto</span> 수집, 스토리보드, 스크립트",
+    "gate.g2": "<span class=\"ok\">auto</span> 렌더, delogo, 내레이션",
+    "gate.g3": "<span class=\"ok\">auto</span> 비공개 초안으로 업로드",
+    "gate.g4": "<span class=\"ok\">사용자</span> 검토 &amp; 게시",
+    "fb.eyebrow": "폴백",
+    "fb.h2": "두 갈래, 모두 처리.",
+    "fb1.when": "채널 계정에 Flow가 없을 때",
+    "fb1.h": "Flow 없이 렌더링",
+    "fb1.p": "<code>build_slideshow.py</code>가 스토리보드 스틸에서 곧바로 내레이션 켄 번스 영상을 렌더링 — 크레딧도, 브라우저도 없이 동일한 다운스트림 체인.",
+    "fb2.when": "채널 ≠ GCP 프로젝트 계정일 때",
+    "fb2.h": "OAuth 없이 업로드",
+    "fb2.p": "<code>upload_youtube_studio.py</code>가 로그인된 Studio 브라우저를 구동: 파일, 제목, 설명, 공개범위를 설정하고 비공개 초안을 저장.",
+    "com.eyebrow": "두 번째 출력 모드",
+    "com.h2": "명령어 하나로, 30초 앱 광고.",
+    "com.p": "동일한 Flow + 한국어 내레이션 엔진이 세로형 앱 광고도 렌더링 — 실제 제품 화면은 그대로, Flow는 영상미 있는 B롤만 공급합니다.",
+    "com.arrows": "<b>제품 캡처</b> &rarr; Google Flow B롤 &rarr; 이어붙이기 &rarr; 더킹 음악 &rarr; Supertonic 한국어 TTS &rarr; <b>MP4 하나</b>",
+    "comA.h": "충실한 제품 UI",
+    "comA.p": "실제 앱 화면을 켄 번스 모션으로 그대로 노출 — 생성 모델을 거치지 않아 텍스트와 레이아웃이 또렷합니다. Flow는 주변 분위기만 렌더링.",
+    "comB.h": "더킹된 한국어 내레이션",
+    "comB.p": "독립적인 사이드체인 더킹 음악 베드 위의 Supertonic 한국어 TTS. Flow 원본 오디오는 폐기하고, 번들된 SpeakCoach 장면은 편집 가능한 템플릿입니다.",
+    "com.barlabel": "제품 캡처로 30초 세로형 커머셜 렌더링",
+    "qs.eyebrow": "빠른 시작",
+    "qs.h2": "검증한 뒤, 실제로 실행.",
+    "qs.p": "크레딧을 한 번이라도 쓰기 전에 드라이런으로 전체 체인을 증명하세요.",
+    "qs.barlabel": "전체 체인 검증 — Flow 크레딧 없음, 업로드 없음",
+    "qs.cmt": "# 실행 매니페스트 확인",
+    "req.py": "<span class=\"m mono\">py</span> <span><b>Python 3.12</b> &nbsp; pip install -r requirements.txt</span>",
+    "req.av": "<span class=\"m mono\">av</span> <span>PATH 위의 <b>ffmpeg + ffprobe</b></span>",
+    "req.ai": "<span class=\"m mono\">ai</span> <span>ChatGPT로 로그인한 <b>codex CLI</b> (이미지 권한)</span>",
+    "req.br": "<span class=\"m mono\">br</span> <span>원격 디버깅과 Studio + Flow 접근이 있는 <b>Chrome</b></span>",
+    "req.js": "<span class=\"m mono\">js</span> <span>Supertonic TTS와 Playwright CLI용 <b>Node 18.3+</b></span>",
+    "req.key": "<span class=\"m mono\">key</span> <span><b>OAuth 클라이언트 시크릿</b> JSON (Data API 경로)</span>",
+    "foot.tag": "아이디어에서 비공개 YouTube 초안 — 또는 30초 앱 광고 — 까지 명령어 하나로. MIT 라이선스 &copy; 2026 cskwork."
+  };
+
+  var nodes = document.querySelectorAll("[data-i18n]");
+  nodes.forEach(function (el) { el.dataset.en = el.innerHTML; });
+
+  var btn = document.getElementById("langToggle");
+
+  function setLang(lang) {
+    nodes.forEach(function (el) {
+      var k = el.getAttribute("data-i18n");
+      el.innerHTML = (lang === "ko" && KO[k] != null) ? KO[k] : el.dataset.en;
+    });
+    document.documentElement.lang = lang;
+    btn.textContent = (lang === "ko") ? "EN" : "한국어";
+    btn.setAttribute("aria-label", (lang === "ko") ? "Switch to English" : "한국어로 전환");
+    try { localStorage.setItem("ya_lang", lang); } catch (e) {}
+  }
+
+  var params = new URLSearchParams(location.search);
+  var stored = null;
+  try { stored = localStorage.getItem("ya_lang"); } catch (e) {}
+  var initial = params.get("lang") || stored || "en";   // default English
+  if (initial !== "ko") initial = "en";
+
+  btn.addEventListener("click", function () {
+    setLang(document.documentElement.lang === "ko" ? "en" : "ko");
+  });
+
+  setLang(initial);
+})();
+</script>
 
 </body>
 </html>
