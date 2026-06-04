@@ -1,4 +1,4 @@
-# ViMax YouTube Autopilot — Runbook
+# YouTube Autopilot — Runbook
 
 Operational guide for running the pipeline by hand and debugging each stage.
 The pipeline is fully automated up to one human gate: flipping the uploaded
@@ -42,7 +42,7 @@ Start Chrome with remote debugging so the Playwright CLI can attach over CDP:
 # macOS example; close other Chrome windows first or use a separate profile.
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
   --remote-debugging-port=9222 \
-  --user-data-dir="$HOME/.config/vimax-chrome-profile"
+  --user-data-dir="$HOME/.config/youtube-autopilot-chrome-profile"
 ```
 
 Then sign into the Google account (Studio + Flow) in that window.
@@ -121,8 +121,8 @@ Debug checklist:
 ## Stage 5 — Narration (Supertonic TTS + ffmpeg mux)
 
 Korean narration default: Supertonic F1 (Mina), speed 0.95, steps 16, lang ko.
-Resolution + synthesis + mux patterns are mirrored from
-`vimax-flow-commercial/scripts/generate_vimax_commercial.py`.
+The same resolution + synthesis + mux patterns also drive commercial mode in
+`scripts/generate_commercial.py`.
 
 Debug checklist:
 
@@ -159,7 +159,7 @@ Tuning procedure:
 ## Stage 7 — Upload + OAuth token bootstrap
 
 Upload uses YouTube Data API v3 with `privacyStatus=private`. Token cache
-default: `~/.config/vimax-youtube-autopilot/token.json`.
+default: `~/.config/youtube-autopilot/token.json`.
 
 First-time token bootstrap (interactive, run once):
 

@@ -111,7 +111,7 @@ def parse_args() -> argparse.Namespace:
                    help="text appended to the description (e.g. BGM attribution)")
     p.add_argument("--script-json", help="JSON with youtube.title/description")
     p.add_argument("--privacy", choices=["private", "unlisted", "public"], default="private")
-    p.add_argument("--channel-url", default="https://studio.youtube.com/channel/UCkYZel8a-aj1BJdj6pYDr5w",
+    p.add_argument("--channel-url", default="https://studio.youtube.com/channel/YOUR_CHANNEL_ID",
                    help="Studio channel base URL")
     p.add_argument("--upload-url", default="", help="override the full upload dialog URL")
     p.add_argument("--cli", default="npx @playwright/cli@latest")

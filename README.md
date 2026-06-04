@@ -1,4 +1,4 @@
-# vimax-youtube-autopilot
+# youtube-autopilot
 
 **Idea to private YouTube draft, with one command.** An unattended pipeline that
 harvests a trending idea, storyboards it, renders motion clips with Google Flow,
@@ -138,6 +138,36 @@ screenshot through Flow garbles its text and layout, so the timeline goes
 Net effect: the audience sees the genuine product UI, while Flow supplies only the
 cinematic surround.
 
+### Commercial mode (one-shot app ad)
+
+For a self-contained **30-second vertical app commercial**, `scripts/generate_commercial.py`
+is a single-command path that wraps the same building blocks: real product screen
+captures + Google Flow B-roll → concat → independent ducked background music →
+Supertonic Korean narration → one MP4. It shares the vendored `google_flow_cli.py`
+with the main pipeline.
+
+```bash
+# Fresh Flow render from product captures (needs an attached Flow browser session)
+python3 scripts/generate_commercial.py \
+  --capture-dir examples/speakcoach/captures \
+  --transcript-file examples/speakcoach/transcript_ko.txt \
+  --run-flow \
+  --flow-project-url "https://labs.google/fx/ko/tools/flow/project/YOUR_FLOW_PROJECT_ID" \
+  --out-dir ./out
+
+# Compose from an existing >=30s Flow hero clip (no Flow submit)
+python3 scripts/generate_commercial.py \
+  --flow-clip ./flow_30s.mp4 \
+  --transcript-file ./transcript_ko.txt \
+  --out-dir ./out
+```
+
+The bundled `SCENES` / `flow_prompt` are a SpeakCoach-style template — edit them
+for another app, or use the generic product-ad mode above. A worked input set
+lives in [`examples/speakcoach/`](examples/speakcoach/). Fonts resolve
+cross-platform (macOS / Windows / Linux); override with the `COMMERCIAL_FONT`
+env var.
+
 ## Built-in fallbacks
 
 Real channels rarely have every account and entitlement on one login. Two proven
@@ -170,7 +200,7 @@ fallbacks handle the common splits:
 - *(Data API upload path only)* A **YouTube OAuth Desktop-app client secret** JSON
   (passed via `--client-secret`, never hardcoded). One-time bootstrap:
   `scripts/get_youtube_token.py`. Token cache default:
-  `~/.config/vimax-youtube-autopilot/token.json`. The Studio-browser upload path
+  `~/.config/youtube-autopilot/token.json`. The Studio-browser upload path
   needs none of this.
 
 ## Browser attach (the hard-won part)
@@ -260,6 +290,7 @@ scripts/
   generate_video.py          Stage 4: Flow render via google_flow_cli.py
   assemble_flow_video.py     concat scene clips + delogo + fit + mux
   build_kenburns_clip.py     product-ad mode: real screen -> Ken-Burns motion clip
+  generate_commercial.py     commercial mode: one-shot 30s vertical app ad
   build_slideshow.py         Flow-free fallback: narrated Ken-Burns slideshow
   remove_logo.py             Stage 5: ffmpeg delogo watermark removal
   add_narration.py           Stage 6: Supertonic TTS + ducked BGM + captions + mux
@@ -284,6 +315,9 @@ tests/
   test_add_narration_integration.py  end-to-end Stage 6 (real ffmpeg)
   test_write_script.py       script + metadata shape
   test_flow_src.py           Flow clip source selection
+  test_generate_commercial.py  commercial-mode render/compose/guard checks
+examples/
+  speakcoach/                worked commercial-mode input set (captures + transcript)
 ```
 
 ## Safety and constraints
@@ -307,4 +341,4 @@ tests/
 
 ## License
 
-Private project. All rights reserved unless stated otherwise.
+[MIT](LICENSE) © 2026 cskwork.

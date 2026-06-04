@@ -1,4 +1,4 @@
-# ViMax YouTube Autopilot — Improvement Log
+# YouTube Autopilot — Improvement Log
 
 A living log. This skill drives third-party UIs (YouTube Studio, Google Flow)
 whose DOM and behavior drift over time, plus generative models whose prompts

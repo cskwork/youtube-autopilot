@@ -1,8 +1,8 @@
 interface:
-  display_name: "ViMax YouTube Autopilot"
+  display_name: "YouTube Autopilot"
   short_description: "Auto YouTube shorts: idea to Flow video to private upload"
   brand_color: "#FF0000"
-  default_prompt: "Use $vimax-youtube-autopilot to mine a channel idea, write a Korean script, render a Flow video with narration, and upload it privately to YouTube."
+  default_prompt: "Use $youtube-autopilot to mine a channel idea, write a Korean script, render a Flow video with narration, and upload it privately to YouTube."
 
 policy:
   allow_implicit_invocation: true

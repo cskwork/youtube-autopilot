@@ -22,7 +22,7 @@ computer voice. Two things are missing that this change adds:
    are spoken. We get exact timing by voicing the script one sentence at a time
    and measuring each, so captions never drift out of sync.
 
-Everything stays inside the one `vimax-youtube-autopilot` skill — you can still
+Everything stays inside the one `youtube-autopilot` skill — you can still
 run the whole "idea -> private YouTube draft" flow with a single command, now
 with music and captions baked in.
 

@@ -189,7 +189,7 @@ def _bounded_download(url: str, dest: Path) -> None:
     host = (parsed.hostname or "").lower()
     if parsed.scheme != "https" or not (host == "jamendo.com" or host.endswith(".jamendo.com")):
         raise ValueError(f"refusing non-jamendo BGM url: {url}")
-    req = urllib.request.Request(url, headers={"User-Agent": "vimax-bgm/1"})
+    req = urllib.request.Request(url, headers={"User-Agent": "youtube-autopilot-bgm/1"})
     with urllib.request.urlopen(req, timeout=15) as resp:
         ctype = (resp.headers.get("Content-Type") or "").lower()
         log(f"[bgm] downloading track (advisory content-type={ctype!r})")

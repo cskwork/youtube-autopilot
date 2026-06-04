@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end orchestrator for vimax-youtube-autopilot.
+"""End-to-end orchestrator for youtube-autopilot.
 
 Chains the seven stage scripts as subprocesses in order:
   harvest_ideas -> make_storyboard -> write_script -> generate_video ->
@@ -46,16 +46,13 @@ def _load_sibling(name: str):
 
 stage_gates = _load_sibling("stage_gates")
 
-DEFAULT_OUT_DIR = (
-    "/Users/danny/Documents/PARA/Resource/autoresearch/ViMax/"
-    ".working_dir/vimax-youtube-autopilot/run"
-)
+# Relative to the current working directory; override with --out-dir.
+DEFAULT_OUT_DIR = ".working_dir/youtube-autopilot/run"
 DEFAULT_FLOW_URL = (
-    "https://labs.google/fx/ko/tools/flow/project/"
-    "01bad1c6-8d7a-4567-9deb-47ff1b6cd3c1"
+    "https://labs.google/fx/ko/tools/flow/project/YOUR_FLOW_PROJECT_ID"
 )
 DEFAULT_FEED = (
-    "https://studio.youtube.com/channel/UCkYZel8a-aj1BJdj6pYDr5w"
+    "https://studio.youtube.com/channel/YOUR_CHANNEL_ID"
     "/content/inspiration/feed"
 )
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 1 of vimax-youtube-autopilot: harvest top-N ranked video ideas.
+"""Stage 1 of youtube-autopilot: harvest top-N ranked video ideas.
 
 Two modes:
   --topic "X"  -> skip scraping; ask codex to synthesize N ideas around X.
@@ -32,7 +32,7 @@ JS = HERE / "js"
 STUDIO_JS = JS / "studio_inspiration.js"
 
 DEFAULT_FEED = (
-    "https://studio.youtube.com/channel/UCkYZel8a-aj1BJdj6pYDr5w"
+    "https://studio.youtube.com/channel/YOUR_CHANNEL_ID"
     "/content/inspiration/feed"
 )
 TRENDING_URL = "https://www.youtube.com/feed/trending"

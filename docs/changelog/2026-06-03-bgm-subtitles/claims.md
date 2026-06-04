@@ -2,7 +2,7 @@
 
 One claim per acceptance criterion in `brief.md`. Each `run-to-prove:` command
 is deterministic and OFFLINE; run it from the worktree root
-(`/Users/danny/Documents/PARA/Resource/autoresearch/vimax-autopilot-bgm-wt`).
+(`youtube-autopilot-bgm-wt`).
 Verdict starts PENDING; the verifier fills it.
 
 ---
@@ -174,7 +174,7 @@ outside this skill.
 
 **run-to-prove:**
 ```bash
-! grep -rnE "from (tools|ViMax|google-flow-video|vimax-flow-commercial)|import (tools)\b" scripts/ && \
+! grep -rnE "from (tools|parent-repo|google-flow-video|flow-commercial)|import (tools)\b" scripts/ && \
 ! grep -rn "\.\./\.\." scripts/*.py && \
 for f in scripts/*.py; do python3 "$f" --help >/dev/null || { echo "FAIL $f"; exit 1; }; done && \
 echo "AC7 OK: no parent-repo imports; every script parses"

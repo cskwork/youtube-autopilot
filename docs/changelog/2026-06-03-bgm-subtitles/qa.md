@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-03
 **Tool:** ffmpeg / orchestrator (CLI) — `scripts/auto_youtube_pipeline.py`
-**Worktree under test:** `/Users/danny/Documents/PARA/Resource/autoresearch/vimax-autopilot-verify-wt` (detached @ `ee5ceab` — "feat(stage6): low-volume royalty-free BGM + selective key-sentence subtitles")
+**Worktree under test:** `youtube-autopilot-verify-wt` (detached @ `ee5ceab` — "feat(stage6): low-volume royalty-free BGM + selective key-sentence subtitles")
 **Headline requirement:** "the whole flow runs from this ONE skill" — prove Stage 6 (BGM + selective captions) works THROUGH the real orchestrator, end-to-end, offline.
 
 ## VERDICT: **PASS**
@@ -42,7 +42,7 @@ Run the full orchestrator, offline:
 ```
 cd /tmp/vya-qa
 env -u JAMENDO_CLIENT_ID PATH="/tmp/vya-qa/stub:$PATH" \
-  python3 /Users/danny/Documents/PARA/Resource/autoresearch/vimax-autopilot-verify-wt/scripts/auto_youtube_pipeline.py \
+  python3 youtube-autopilot-verify-wt/scripts/auto_youtube_pipeline.py \
   --dry-run \
   --skip-harvest --ideas-json /tmp/vya-qa/ideas.json \
   --skip-storyboard \
@@ -147,13 +147,13 @@ The manifest's `narration` block records the full BGM + subtitle info (above). A
 Every Python stage invoked resolved under the verify worktree's own `scripts/`:
 
 ```
-.../vimax-autopilot-verify-wt/scripts/write_script.py
-.../vimax-autopilot-verify-wt/scripts/remove_logo.py
-.../vimax-autopilot-verify-wt/scripts/add_narration.py   (+ its siblings audio_mix/subtitles/bgm_library, loaded by path)
-.../vimax-autopilot-verify-wt/scripts/upload_youtube.py
+.../youtube-autopilot-verify-wt/scripts/write_script.py
+.../youtube-autopilot-verify-wt/scripts/remove_logo.py
+.../youtube-autopilot-verify-wt/scripts/add_narration.py   (+ its siblings audio_mix/subtitles/bgm_library, loaded by path)
+.../youtube-autopilot-verify-wt/scripts/upload_youtube.py
 ```
 
-The only external binaries were the offline stubs (`/tmp/vya-qa/stub/codex`, `/tmp/vya-qa/stub/supertts`), placed first on PATH so they shadowed the real `codex` at `/Users/danny/.nvm/.../codex` (which would have gone online). `git status --porcelain` in the verify worktree is **empty** — no tracked source file was edited.
+The only external binaries were the offline stubs (`/tmp/vya-qa/stub/codex`, `/tmp/vya-qa/stub/supertts`), placed first on PATH so they shadowed the real `codex` at `~/.nvm/.../codex` (which would have gone online). `git status --porcelain` in the verify worktree is **empty** — no tracked source file was edited.
 
 ---
 

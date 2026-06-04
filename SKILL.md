@@ -1,6 +1,6 @@
 ---
-name: vimax-youtube-autopilot
-description: Fully-automated YouTube video pipeline. Harvests trending ideas from the YouTube Studio inspiration feed (fallback YouTube trending), expands a chosen idea into a codex storyboard, renders motion clips with Gemini/Google Flow (one per scene, then assembled), removes the Flow sparkle watermark with ffmpeg delogo, narrates it in Korean with Supertonic TTS, and uploads it as a PRIVATE draft. Everything runs unattended; the ONLY human step is flipping the private draft to public in YouTube Studio. Two proven fallbacks for account/access splits: when the channel account lacks Flow access, build_slideshow.py renders a narrated Ken-Burns video from the storyboard stills; when the channel account differs from any GCP project (so Data API OAuth is impractical), upload_youtube_studio.py uploads by driving the logged-in Studio browser instead. Use when the user wants an end-to-end "idea to private YouTube draft" automation, a Studio-inspired short, or a reproducible Flow + Korean-narration upload pipeline.
+name: youtube-autopilot
+description: Fully-automated YouTube video pipeline. Harvests trending ideas from the YouTube Studio inspiration feed (fallback YouTube trending), expands a chosen idea into a codex storyboard, renders motion clips with Gemini/Google Flow (one per scene, then assembled), removes the Flow sparkle watermark with ffmpeg delogo, narrates it in Korean with Supertonic TTS, and uploads it as a PRIVATE draft. Everything runs unattended; the ONLY human step is flipping the private draft to public in YouTube Studio. Two proven fallbacks for account/access splits: when the channel account lacks Flow access, build_slideshow.py renders a narrated Ken-Burns video from the storyboard stills; when the channel account differs from any GCP project (so Data API OAuth is impractical), upload_youtube_studio.py uploads by driving the logged-in Studio browser instead. A built-in commercial mode (generate_commercial.py) renders a one-shot 30s vertical app ad from real product screen captures plus Flow B-roll, ducked music, and Supertonic narration. Use when the user wants an end-to-end "idea to private YouTube draft" automation, a Studio-inspired short, a reproducible Flow + Korean-narration upload pipeline, or a Flow-based app commercial.
 ---
 
 <objective>
@@ -18,6 +18,8 @@ private YouTube Data API upload (stops at the human publish gate).
   YouTube draft for review before publishing.
 - The user wants to re-run a single stage (harvest, storyboard, script, video,
   delogo, narration, upload) with the same contracts.
+- The user wants a one-shot 30s vertical APP COMMERCIAL from real product
+  screen captures + Flow B-roll + Korean narration (see `<commercial_mode>`).
 </when_to_use>
 
 <browser_attach>
@@ -193,6 +195,34 @@ Net effect: the audience sees the genuine product UI, while Flow supplies only
 the cinematic surround.
 </product_ad_mode>
 
+<commercial_mode>
+For a self-contained 30-second VERTICAL app commercial, `generate_commercial.py`
+is a one-shot path over the same building blocks (no 7-stage orchestrator):
+real product captures + Google Flow B-roll -> concat -> independent ducked
+background music -> Supertonic Korean narration -> one MP4. It shares the
+vendored `google_flow_cli.py`.
+
+```bash
+# Fresh Flow render from product captures (needs an attached Flow browser session)
+python3 scripts/generate_commercial.py \
+  --capture-dir examples/speakcoach/captures \
+  --transcript-file examples/speakcoach/transcript_ko.txt \
+  --run-flow \
+  --flow-project-url "https://labs.google/fx/ko/tools/flow/project/YOUR_FLOW_PROJECT_ID" \
+  --out-dir ./out
+
+# Compose from an existing >=30s Flow hero clip (no Flow submit)
+python3 scripts/generate_commercial.py \
+  --flow-clip ./flow_30s.mp4 --transcript-file ./transcript_ko.txt --out-dir ./out
+```
+
+The bundled `SCENES`/`flow_prompt` are an editable SpeakCoach-style template;
+the GENERIC path is `<product_ad_mode>` above. Fonts resolve cross-platform
+(macOS/Windows/Linux); override with the `COMMERCIAL_FONT` env var. On success it
+prints one JSON line: `{"ok": true, "final": <path>, ...}`. Worked inputs live in
+`examples/speakcoach/` (the rendered demo MP4 is not committed — reproduce it).
+</commercial_mode>
+
 <gates>
 `scripts/stage_gates.py` is the teeth behind "each stage must pass". After every
 stage the orchestrator re-inspects the produced artifact and raises a hard stop
@@ -238,7 +268,7 @@ per-gate `min_duration` / `min_bytes` args.
 - Node 18.3+ and npm for the Supertonic fallback and the Playwright agent CLI.
 - A YouTube OAuth Desktop-app client secret JSON (passed via `--client-secret`,
   never hardcoded). One-time bootstrap: `scripts/get_youtube_token.py`. Token
-  cache default: `~/.config/vimax-youtube-autopilot/token.json`.
+  cache default: `~/.config/youtube-autopilot/token.json`.
 </requirements>
 
 <important_constraints>
@@ -284,6 +314,10 @@ per-gate `min_duration` / `min_bytes` args.
 - `scripts/build_kenburns_clip.py` — product-ad mode: render ONE real product
   screenshot as a faithful Ken-Burns clip (sharp UI, blurred-cover bg, fixed
   geometry) so real screens concat with Flow B-roll without being regenerated.
+- `scripts/generate_commercial.py` — commercial mode: one-shot 30s vertical app
+  ad (real product captures + Flow B-roll + independent ducked music + Supertonic
+  Korean TTS). Shares `google_flow_cli.py`; bundled SCENES are an editable
+  SpeakCoach-style template. Worked inputs in `examples/speakcoach/`.
 - `scripts/remove_logo.py` — Stage 5: ffmpeg `delogo` watermark removal.
 - `scripts/add_narration.py` — Stage 6 conductor: per-sentence Supertonic TTS +
   low BGM bed + ducking + selective burned key captions + ffmpeg mux.

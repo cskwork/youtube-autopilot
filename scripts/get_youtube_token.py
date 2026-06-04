@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One-time helper: run the YouTube OAuth consent flow and cache the token.
 
-Stage 7 setup for vimax-youtube-autopilot. Opens the InstalledAppFlow consent
+Stage 7 setup for youtube-autopilot. Opens the InstalledAppFlow consent
 in a browser once, then persists the resulting credentials (chmod 600) so the
 uploader can run unattended afterwards.
 
@@ -21,7 +21,7 @@ from pathlib import Path
 from google_auth_oauthlib.flow import InstalledAppFlow
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
-DEFAULT_TOKEN = os.path.expanduser("~/.config/vimax-youtube-autopilot/token.json")
+DEFAULT_TOKEN = os.path.expanduser("~/.config/youtube-autopilot/token.json")
 
 
 def parse_args() -> argparse.Namespace:

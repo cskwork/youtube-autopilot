@@ -30,7 +30,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
-DEFAULT_TOKEN = os.path.expanduser("~/.config/vimax-youtube-autopilot/token.json")
+DEFAULT_TOKEN = os.path.expanduser("~/.config/youtube-autopilot/token.json")
 DEFAULT_CATEGORY = "22"  # People & Blogs
 
 
