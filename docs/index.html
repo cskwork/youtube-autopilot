@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>vimax-youtube-autopilot — idea to private YouTube draft, one command</title>
+<title>youtube-autopilot — idea to private YouTube draft, one command</title>
 <meta name="description" content="An unattended pipeline that harvests a trending idea, storyboards it, renders motion clips with Google Flow, removes the watermark, narrates it in Korean, and uploads it as a private YouTube draft." />
-<meta property="og:title" content="vimax-youtube-autopilot" />
+<meta property="og:title" content="youtube-autopilot" />
 <meta property="og:description" content="Idea to private YouTube draft, with one command." />
 <meta property="og:type" content="website" />
 <style>
@@ -229,12 +229,13 @@
 
 <nav>
   <div class="wrap row">
-    <a class="brand" href="#top"><span class="dot"></span> vimax-youtube-autopilot</a>
+    <a class="brand" href="#top"><span class="dot"></span> youtube-autopilot</a>
     <div class="nav-links">
       <a href="#pipeline">Pipeline</a>
       <a href="#features">Features</a>
+      <a href="#commercial">Commercial</a>
       <a href="#start">Quick start</a>
-      <a class="btn btn-primary" href="https://github.com/cskwork/vimax-youtube-autopilot">View on GitHub</a>
+      <a class="btn btn-primary" href="https://github.com/cskwork/youtube-autopilot">View on GitHub</a>
     </div>
   </div>
 </nav>
@@ -247,6 +248,8 @@
       An unattended pipeline that harvests a trending idea, storyboards it, renders
       motion clips with Google Flow, strips the watermark, narrates it in Korean,
       and uploads it as a private draft. The only human step left is hitting publish.
+      A built-in <a href="#commercial" style="color:var(--accent-3)">commercial mode</a>
+      turns real product screens into a 30-second vertical app ad with the same engine.
     </p>
     <div class="cta">
       <a class="btn btn-primary" href="#start">Get started</a>
@@ -256,7 +259,7 @@
     <div class="stats">
       <div class="stat"><div class="n">7</div><div class="l">Composable stages</div></div>
       <div class="stat"><div class="n">1</div><div class="l">Command to run</div></div>
-      <div class="stat"><div class="n">1</div><div class="l">Human step left</div></div>
+      <div class="stat"><div class="n">2</div><div class="l">Output modes</div></div>
       <div class="stat"><div class="n">0</div><div class="l">Hardcoded secrets</div></div>
     </div>
 
@@ -391,6 +394,48 @@
   </div>
 </section>
 
+<section id="commercial">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Second output mode</span>
+      <h2>One command, a 30-second app commercial.</h2>
+      <p>The same Flow + Korean-narration engine also renders a vertical app ad —
+        real product screens stay verbatim, Flow supplies only the cinematic B-roll.</p>
+    </div>
+
+    <div class="pipe-arrows" style="margin-top:34px">
+      <b>Product captures</b> &rarr; Google Flow B-roll &rarr; concat &rarr; ducked music &rarr; Supertonic Korean TTS &rarr; <b>1 MP4</b>
+    </div>
+
+    <div class="grid" style="grid-template-columns:repeat(2,1fr)">
+      <div class="card">
+        <div class="ic">&#127902;</div>
+        <h3>Faithful product UI</h3>
+        <p>Real app screens are shown verbatim as Ken-Burns motion — never fed through a generative model, so text and layout stay crisp. Flow renders only the surrounding atmosphere.</p>
+        <span class="tag mono">generate_commercial.py</span>
+      </div>
+      <div class="card">
+        <div class="ic">&#9835;</div>
+        <h3>Ducked Korean narration</h3>
+        <p>Supertonic Korean TTS over an independent, sidechain-ducked music bed. Flow's source audio is discarded; the bundled SpeakCoach scenes are an editable template.</p>
+        <span class="tag mono">--run-flow · --flow-clip</span>
+      </div>
+    </div>
+
+    <div class="cmd" style="margin-top:36px">
+      <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="t mono">render a 30s vertical commercial from product captures</span></div>
+<pre class="mono"><span class="tok-cmd">python3</span> scripts/generate_commercial.py \
+  <span class="tok-flag">--capture-dir</span> examples/speakcoach/captures \
+  <span class="tok-flag">--transcript-file</span> examples/speakcoach/transcript_ko.txt \
+  <span class="tok-flag">--run-flow</span> \
+  <span class="tok-flag">--flow-project-url</span> <span class="tok-str">"…/flow/project/YOUR_FLOW_PROJECT_ID"</span> \
+  <span class="tok-flag">--out-dir</span> ./out
+
+<span class="tok-out">{"ok": true, "final": "./out/…_demo.mp4", "flow_clip": "…", "voice": "…"}</span></pre>
+    </div>
+  </div>
+</section>
+
 <section id="start">
   <div class="wrap">
     <div class="sec-head">
@@ -421,15 +466,16 @@
 
 <footer>
   <div class="wrap foot-row">
-    <div class="brand"><span class="dot"></span> vimax-youtube-autopilot</div>
+    <div class="brand"><span class="dot"></span> youtube-autopilot</div>
     <div>
-      <a href="https://github.com/cskwork/vimax-youtube-autopilot">GitHub</a> &nbsp;·&nbsp;
+      <a href="https://github.com/cskwork/youtube-autopilot">GitHub</a> &nbsp;·&nbsp;
       <a href="#pipeline">Pipeline</a> &nbsp;·&nbsp;
-      <a href="#start">Quick start</a>
+      <a href="#commercial">Commercial</a> &nbsp;·&nbsp;
+      <a href="https://github.com/cskwork/youtube-autopilot/blob/main/LICENSE">MIT License</a>
     </div>
   </div>
   <div class="wrap" style="margin-top:18px; font-size:13px;">
-    Idea to private YouTube draft, with one command. Private project — all rights reserved.
+    Idea to private YouTube draft — or a 30s app commercial — in one command. MIT licensed &copy; 2026 cskwork.
   </div>
 </footer>
 

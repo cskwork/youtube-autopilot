@@ -1,11 +1,11 @@
-# Run: BGM + selective subtitles for vimax-youtube-autopilot
+# Run: BGM + selective subtitles for youtube-autopilot
 
 - **Mode**: LEGACY (add feature to existing self-contained skill repo)
 - **Date**: 2026-06-03
 - **base_branch**: `main` (autopilot nested repo @ `b187a8e`)
 - **run_branch / target_branch**: `feat/bgm-subtitles` (feature branch; NOT auto-merged to main)
-- **worktree_path**: `/Users/danny/Documents/PARA/Resource/autoresearch/vimax-autopilot-bgm-wt`
-- **Repo under change**: `skills/vimax-youtube-autopilot/` (its OWN git repo, nested inside ViMax; ViMax treats it as untracked)
+- **worktree_path**: `youtube-autopilot-bgm-wt`
+- **Repo under change**: `skills/youtube-autopilot/` (its OWN git repo, nested inside parent-repo; parent-repo treats it as untracked)
 
 ## Objective
 
@@ -16,7 +16,7 @@ Stage 6 (`add_narration.py`) currently does Korean TTS + a plain ffmpeg mux. Add
 
 ## Hard constraints (from user)
 
-- **Self-contained**: the entire flow (idea -> video -> BGM -> subtitles -> private YouTube draft) must run from **this one skill** alone. No reaching into the parent ViMax repo's `tools/` or other skills.
+- **Self-contained**: the entire flow (idea -> video -> BGM -> subtitles -> private YouTube draft) must run from **this one skill** alone. No reaching into the parent parent-repo repo's `tools/` or other skills.
 - BGM volume small; narration must stay clearly audible.
 - Subtitles only for key parts, not a full transcript wall.
 - Free / royalty-free music only; attribution surfaced when the license requires it.

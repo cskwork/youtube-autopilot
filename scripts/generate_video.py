@@ -19,7 +19,7 @@ HERE = Path(__file__).resolve().parent
 DEFAULT_FLOW_CLI = HERE / "google_flow_cli.py"
 DEFAULT_FLOW_URL = (
     "https://labs.google/fx/ko/tools/flow/project/"
-    "01bad1c6-8d7a-4567-9deb-47ff1b6cd3c1"
+    "YOUR_FLOW_PROJECT_ID"
 )
 
 

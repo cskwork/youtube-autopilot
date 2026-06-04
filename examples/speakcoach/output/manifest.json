@@ -1,0 +1,12 @@
+{
+  "pipeline": "Google Flow + Agent Browser captures + Supertonic Korean TTS",
+  "final": "./speakcoach_edu_flow_supertonic_demo.mp4",
+  "flow_clip": "./speakcoach_edu_flow_hero.mp4",
+  "voice": "generated at runtime as OUT_DIR/supertonic_ko_voice.wav",
+  "tts": {
+    "engine": "supertonic-tts",
+    "voice": "F1",
+    "voice_name": "Mina",
+    "lang": "ko"
+  }
+}

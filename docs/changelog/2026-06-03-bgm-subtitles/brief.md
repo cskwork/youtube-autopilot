@@ -1,7 +1,7 @@
 # Brief
 
 - **Mode**: LEGACY (no Validate/GO gate). Decision to proceed: pending Human Feedback.
-- **Goal**: Add always-on low-volume royalty-free BGM + selective key-sentence subtitles to Stage 6 of vimax-youtube-autopilot, fully self-contained in the skill.
+- **Goal**: Add always-on low-volume royalty-free BGM + selective key-sentence subtitles to Stage 6 of youtube-autopilot, fully self-contained in the skill.
 - **Acceptance criteria** (carried into the Verify Coverage map):
   1. Every produced video has BGM under the narration at low gain; narration stays clearly audible.
   2. BGM is selected fresh per run by mood when online; an offline/no-key run still produces BGM (synth pad). Run never hard-fails for music.
