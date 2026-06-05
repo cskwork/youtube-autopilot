@@ -186,3 +186,24 @@ def gate_storyboard(storyboard_dir: Path, *, min_scenes: int = 1,
         if size < min_bytes:
             raise GateError(f"{label}: frame {frame} too small ({size} < {min_bytes} bytes)")
     return {"frames": len(frames)}
+
+
+def gate_page_facts(path: Path, *, label: str = "ingest_url") -> dict:
+    """Assert ingested page facts carry the grounding a marketing script needs.
+
+    The URL-AD workflow's script stage is grounded in these facts (it must not
+    invent features) and maps them onto a hook -> USP -> CTA structure, so the
+    load-bearing fields are an identity (url + title), at least one value
+    proposition (the USP source), and a call-to-action (cta_text).
+    """
+    data = _load_json(path, label)
+    if not isinstance(data, dict):
+        raise GateError(f"{label}: page facts JSON must be an object: {path}")
+    for key in ("url", "title", "cta_text"):
+        value = data.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise GateError(f"{label}: missing/empty {key} in {path}")
+    props = data.get("value_props")
+    if not isinstance(props, list) or not props:
+        raise GateError(f"{label}: need >= 1 value_props in {path}")
+    return {"value_props": len(props), "url": data["url"].strip()}

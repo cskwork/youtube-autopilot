@@ -163,3 +163,39 @@ def test_gate_storyboard_fails_when_no_frames(tmp_path):
     (sb / "storyboard.json").write_text(json.dumps({"scenes": []}), encoding="utf-8")
     with pytest.raises(GateError, match="scene_"):
         stage_gates.gate_storyboard(sb, min_scenes=1)
+
+
+# --- page-facts gate (URL-AD Stage 0 grounding) ------------------------------
+
+def test_gate_page_facts_passes_and_fails(tmp_path):
+    good = tmp_path / "page_facts.json"
+    good.write_text(json.dumps({
+        "url": "https://example.com",
+        "title": "Example Product",
+        "value_props": ["Save hours of editing", "No recording needed"],
+        "cta_text": "Start free",
+    }), encoding="utf-8")
+    assert stage_gates.gate_page_facts(good)["value_props"] == 2
+    # empty value_props -> no USP source -> fail
+    no_props = tmp_path / "noprops.json"
+    no_props.write_text(json.dumps({
+        "url": "https://example.com", "title": "X",
+        "value_props": [], "cta_text": "Go",
+    }), encoding="utf-8")
+    with pytest.raises(GateError, match="value_props"):
+        stage_gates.gate_page_facts(no_props)
+    # blank cta_text -> no CTA slot -> fail
+    no_cta = tmp_path / "nocta.json"
+    no_cta.write_text(json.dumps({
+        "url": "https://example.com", "title": "X",
+        "value_props": ["a"], "cta_text": "   ",
+    }), encoding="utf-8")
+    with pytest.raises(GateError, match="cta_text"):
+        stage_gates.gate_page_facts(no_cta)
+
+
+def test_gate_page_facts_fails_non_object(tmp_path):
+    arr = tmp_path / "arr.json"
+    arr.write_text(json.dumps(["not", "an", "object"]), encoding="utf-8")
+    with pytest.raises(GateError, match="object"):
+        stage_gates.gate_page_facts(arr)

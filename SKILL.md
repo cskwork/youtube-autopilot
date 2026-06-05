@@ -1,30 +1,41 @@
 ---
 name: youtube-autopilot
-description: Fully-automated YouTube video pipeline. Harvests trending ideas from the YouTube Studio inspiration feed (fallback YouTube trending), expands a chosen idea into a codex storyboard, renders motion clips with Gemini/Google Flow (one per scene, then assembled), removes the Flow sparkle watermark with ffmpeg delogo, narrates it in Korean with Supertonic TTS, and uploads it as a PRIVATE draft. Everything runs unattended; the ONLY human step is flipping the private draft to public in YouTube Studio. Two proven fallbacks for account/access splits: when the channel account lacks Flow access, build_slideshow.py renders a narrated Ken-Burns video from the storyboard stills; when the channel account differs from any GCP project (so Data API OAuth is impractical), upload_youtube_studio.py uploads by driving the logged-in Studio browser instead. A built-in commercial mode (generate_commercial.py) renders a one-shot 30s vertical app ad from real product screen captures plus Flow B-roll, ducked music, and Supertonic narration. Use when the user wants an end-to-end "idea to private YouTube draft" automation, a Studio-inspired short, a reproducible Flow + Korean-narration upload pipeline, or a Flow-based app commercial.
+description: Intent-routed automated video-generation pipeline. Step 0 classifies the request into ONE of three workflows and loads its spec from references/workflows/, then composes shared building blocks to a finished video. (1) url-ad — "no recording, no editing, just paste a URL": ingest a website/landing/product page (Playwright scrape of Open Graph/meta + readable text + screenshots), ground a hook->USP->CTA script in the real page facts, show the captured page as faithful B-roll, and narrate it — the clickcast.tech category. (2) idea-video — the unattended "idea to private YouTube draft" flow that harvests the Studio inspiration feed (or a --topic), storyboards via codex, renders Gemini/Google Flow clips, delogos the watermark, narrates in Korean with Supertonic TTS, and uploads a PRIVATE draft. (3) product-ad — advertise an existing app/site whose real UI must appear faithfully (hybrid real-screen Ken-Burns + Flow B-roll), including a one-shot 30s vertical app commercial. Shared across workflows: Google Flow render (or slideshow fallback), per-sentence Supertonic narration, royalty-free ducked BGM, format-aware burned captions, gated fail-fast stages, and private-by-default upload. Use whenever the user wants a marketing/YouTube video made automatically — from a URL, an idea/topic, or an existing product.
 ---
 
-<objective>
-Take a channel from inspiration to a ready-to-publish private YouTube draft with
-one command, via this required chain:
-Studio inspiration ideas -> codex storyboard -> Gemini/Flow video ->
-delogo watermark removal -> Supertonic Korean TTS narration ->
-private YouTube Data API upload (stops at the human publish gate).
-</objective>
+<overview>
+youtube-autopilot makes a finished video automatically. It is intent-routed: the
+SAME building blocks (Flow render or slideshow, Supertonic narration, ducked
+royalty-free BGM, format-aware captions, gated stages, private-by-default upload)
+are composed by one of three workflows. Only the FRONT of the pipeline — what the
+video is made FROM — differs. Pick the workflow first, then follow its spec.
+</overview>
 
-<when_to_use>
-- The user wants an unattended "idea to private draft" YouTube workflow.
-- The user wants a short inspired by their channel's Studio inspiration feed.
-- The user wants a Google Flow clip with Korean narration uploaded as a private
-  YouTube draft for review before publishing.
-- The user wants to re-run a single stage (harvest, storyboard, script, video,
-  delogo, narration, upload) with the same contracts.
-- The user wants a one-shot 30s vertical APP COMMERCIAL from real product
-  screen captures + Flow B-roll + Korean narration (see `<commercial_mode>`).
-</when_to_use>
+<workflows>
+Step 0 — classify the request into ONE workflow, state it to the user in one
+line, then load its spec from `references/workflows/`. Do not inline a workflow's
+detail here; load the file.
+
+| Signal in the request | Workflow | Load |
+|---|---|---|
+| A pasted link; "turn this URL / website / landing / product page into a video/ad/demo"; "no recording, just paste a URL" | **url-ad** | `references/workflows/url-ad.md` |
+| "idea to draft"; a short from my Studio inspiration feed; `--topic ... -> YouTube`; trending-seeded; "re-run one stage" | **idea-video** | `references/workflows/idea-video.md` |
+| "advertise my app/product (real UI must show faithfully)"; "30s app commercial"; user supplies real screen captures | **product-ad** | `references/workflows/product-ad.md` |
+
+Tie-breakers: when a URL is the input and the page itself should appear on
+screen, prefer **url-ad**; when the user supplies real screen captures or the
+product has no public URL, prefer **product-ad**; the **idea-video** flow is the
+default for inspiration/topic-seeded YouTube drafts. If still ambiguous, ask one
+question.
+
+All three share the contracts below (`<browser_attach>`, `<gates>`,
+`<requirements>`, `<important_constraints>`, `<files>`, `<validation>`).
+</workflows>
 
 <browser_attach>
-The browser stages (harvest, Flow video, Studio upload) drive ONE logged-in
-Chrome session via the Playwright agent CLI. Proven setup (Chrome 148, macOS):
+The browser stages (URL ingest, harvest, Flow video, Studio upload) drive ONE
+logged-in Chrome session via the Playwright agent CLI. Proven setup (Chrome 148,
+macOS):
 
 1. Chrome 148 ignores `--remote-debugging-port` on the default profile. Enable
    it via the UI instead: open `chrome://inspect/#remote-debugging` and turn on
@@ -42,186 +53,13 @@ Chrome session via the Playwright agent CLI. Proven setup (Chrome 148, macOS):
    an outward-facing, credit-spending, hard-to-reverse action. In an agent
    harness (e.g. Claude Code) the auto-permission classifier BLOCKS this by
    default, so a live run cannot proceed unattended — the human MUST explicitly
-   approve it. A one-time attach approval is NOT enough: harvest, Flow video, and
-   Studio upload each re-invoke the CLI, so grant a standing allow rule for
-   `npx @playwright/cli@latest *` (or run the attach yourself via the shell `!`
-   prefix and approve each subsequent stage). Treat this as a deliberate human
-   gate before any real credit spend or upload, never a step to work around.
+   approve it. A one-time attach approval is NOT enough: URL ingest, harvest,
+   Flow video, and Studio upload each re-invoke the CLI, so grant a standing
+   allow rule for `npx @playwright/cli@latest *` (or run the attach yourself via
+   the shell `!` prefix and approve each subsequent stage). Treat this as a
+   deliberate human gate before any real credit spend or upload, never a step to
+   work around.
 </browser_attach>
-
-<quick_start>
-One command runs the whole pipeline and stops at the private draft:
-
-```bash
-python3 scripts/auto_youtube_pipeline.py \
-  --topic "" \
-  --idea-index 0 \
-  --scenes 6 \
-  --client-secret /path/to/oauth_client_secret.json
-```
-
-Topic-seeded run (skip scraping; synthesize ideas around a topic):
-
-```bash
-python3 scripts/auto_youtube_pipeline.py \
-  --topic "초보자를 위한 홈카페 레시피" \
-  --client-secret /path/to/oauth_client_secret.json
-```
-
-Validate the whole pipeline WITHOUT spending Flow credits or uploading:
-
-```bash
-python3 scripts/auto_youtube_pipeline.py \
-  --topic "테스트 주제" --dry-run --video ./sample.mp4
-```
-
-On success the orchestrator prints exactly one JSON line:
-`{"ok": true, "manifest": "<path>", "studio_url": "<url|null>", "stopped_for": "human-publish"}`.
-All per-stage progress goes to stderr.
-</quick_start>
-
-<process>
-The orchestrator `scripts/auto_youtube_pipeline.py` chains seven stage scripts as
-subprocesses, threading each stage's output into the next and writing a
-`manifest.json`. Each stage also runs standalone with the same contract (one
-`{"ok": true, ...}` JSON line on stdout, logs on stderr).
-
-Every stage must pass before the next begins. Exit-code-0 and `{"ok": true}` are
-necessary but NOT sufficient: after each stage the orchestrator runs a
-`scripts/stage_gates.py` verification on the REAL artifact and hard-stops
-(`GATE FAILED after '<stage>'`) the moment something is missing or degraded — a
-truncated/streamless video, a SILENT narration track (TTS produced nothing), an
-empty ideas file, or a storyboard with no rendered frames. A failing gate never
-reaches the next stage and never uploads. See `<gates>` below.
-
-1. **Harvest** (`harvest_ideas.py`): attach to logged-in Chrome, scrape the
-   YouTube Studio inspiration feed (`js/studio_inspiration.js`), fall back to
-   youtube.com trending, then ask codex to rank N idea objects. With `--topic`
-   it skips scraping and synthesizes ideas directly. Output: `ideas.json`.
-2. **Storyboard** (`make_storyboard.py`): pick the idea (`--idea-index`), ask
-   codex for an N-scene JSON breakdown, render one storyboard PNG per scene via
-   the gpt-image-2 skill's `gen.sh`. Output: `storyboard/` + `storyboard.json`.
-3. **Script** (`write_script.py`): codex writes the Korean narration, a
-   consolidated Flow prompt, per-scene prompts, and YouTube metadata
-   (title/description/tags/category) as strict JSON. Output: `script.json`.
-4. **Video** (`generate_video.py`): seed the vendored `google_flow_cli.py` with
-   a Flow prompt + storyboard frames, render and download ONLY the new
-   post-submit MP4. For a full-length result, call it once per
-   `scene_prompts[i]` (each seeded with its own `scene_0i.png`) to get one ~8s
-   clip per scene, then `assemble_flow_video.py` concats them, delogos, fits to
-   the narration length, and muxes. In `--dry-run` this is a supplied `--video`
-   or a generated 2s placeholder.
-   - Flow access fallback: if the channel account has no Flow video access, skip
-     Flow entirely and run `build_slideshow.py` to render a narrated Ken-Burns
-     video from the storyboard stills (no credits, no browser).
-5. **Delogo** (`remove_logo.py`): ffmpeg `delogo` wipes the bottom-right
-   Gemini/Flow sparkle watermark. Default box auto-sizes from resolution; for
-   1280x720 Flow clips the watermark sits at ~(1140,645), so `--box
-   1095:600:160:100` is a tight fit. (`assemble_flow_video.py` does this inline.)
-   Output: `delogo.mp4`.
-6. **Narration + music + captions** (`add_narration.py`): Supertonic Korean TTS
-   (default F1/Mina, speed 0.95, steps 16, lang ko) synthesizes the voice
-   ONE SENTENCE AT A TIME, ffprobes each duration for drift-free timing, and
-   concatenates them into the full narration WAV. A low-volume (~0.16)
-   royalty-free background track is laid under it with `afade` in/out and
-   sidechain DUCKING (on by default), via three cohesive sibling modules:
-   `subtitles.py` (segmentation + per-sentence timing + `.srt`/`.ass`),
-   `bgm_library.py` (resolve one track by mood), `audio_mix.py` (pure ffmpeg
-   mix graph). Only the KEY sentences (from `script.json` `key_sentences`, else
-   a sparse heuristic) are burned in as bottom-centered captions at exact times
-   (forces a libx264 re-encode). Captions are sized to the REAL video frame and
-   tuned per FORMAT — Shorts/vertical (9:16) get a phone-legible font and a tall
-   bottom margin that clears the Shorts UI; a standard/landscape (16:9) video
-   keeps the proven smaller look. `subtitles._ass_header` sets `PlayResX/Y` to
-   the actual frame (1:1 scaling) and branches on portrait vs landscape, so a
-   fixed-aspect header never balloons or overflows the text. Styling is
-   Korean-variety/TV-show flavored: captions cycle a colour+position palette
-   (`_CAPTION_PRESETS`) and POP key words (accent colour + bigger, bolder,
-   scale-animated) — emphasis terms come from `script.json` youtube tags (else
-   each caption pops its longest token), capped so a line never becomes a wall
-   of colour. BGM resolution order is explicit `--bgm` >
-   mood cache > Jamendo. Real generation is the default: if no REAL source
-   resolves, the stage HARD-STOPS unless `--allow-synth-bgm` is passed, which
-   permits the synthesized CC0 ambient pad (ffmpeg `lavfi`) fallback; `--no-bgm`
-   is the explicit narration-only opt-out. Only CC-BY/CC-BY-SA/CC0
-   tracks are accepted; when a track requires credit, attribution is written to
-   `CREDITS.txt` beside the video and threaded into the upload description.
-   `--no-bgm`/`--no-subtitles` restore the prior single-shot, music-free path.
-   The final mux FREEZE-PADS the video (holds the last frame via ffmpeg `tpad`)
-   up to the narration length, so a clip shorter than the voiceover (an ~8s Flow
-   clip vs a ~15s narration) is never truncated mid-sentence; the output length
-   equals the narration. The pad is applied BEFORE the caption burn so cues over
-   the held tail still render. (For motion across the whole runtime instead of a
-   held tail, generate one clip per scene and `assemble_flow_video.py` stretches
-   them to the narration with `setpts`.)
-   Output: `narrated.mp4` (+ `captions.srt`/`captions.ass`, optional `CREDITS.txt`).
-7. **Upload** — two paths, same private-draft outcome:
-   - `upload_youtube.py`: YouTube Data API v3 resumable upload, metadata from
-     `script.json`. Needs an OAuth Desktop client whose consent screen lists the
-     channel account as a test user. In `--dry-run` it validates only.
-   - `upload_youtube_studio.py` (proven, no OAuth): drives the logged-in Studio
-     browser — `setInputFiles` the MP4, set title/description, mark
-     not-made-for-kids, advance the wizard, set visibility, save. Use this when
-     the channel account differs from the GCP project account (the common case).
-
-The pipeline STOPS here. The ONLY remaining human step: open the private draft
-in YouTube Studio and flip it private -> public once reviewed.
-</process>
-
-<product_ad_mode>
-Advertising an EXISTING product (an app, site, or device with a real UI) adds
-exactly one rule to the pipeline: the product's real screens must appear
-FAITHFULLY. Generative video re-renders whatever it is seeded with, so feeding a
-real UI screenshot through Flow garbles its text and layout. So in product-ad
-mode the timeline is HYBRID, and this rule is domain-agnostic — the product,
-its screens, and the script are inputs, never hardcoded:
-
-- Flow renders only B-roll/atmosphere (people, hands, environment, mood). It is
-  NEVER seeded with the product UI itself.
-- Real product screens are captured from the live product (or supplied by the
-  user) and shown VERBATIM as Ken-Burns motion clips via
-  `build_kenburns_clip.py` (sharp pixels, subtle pan, blurred-cover background,
-  fixed WxH/fps). They are never sent to a generative model.
-- Both clip kinds are normalized to ONE geometry and concatenated with
-  `assemble_flow_video.py`; delogo runs per Flow clip only (real screens carry
-  no watermark). Narration/BGM/captions (`add_narration.py`) and upload then
-  proceed unchanged.
-- Capture real screens with the SAME attached browser used for Flow/Studio:
-  navigate the live product, set the target viewport, screenshot; when a screen
-  needs data to render, seed the product's own storage (e.g. localStorage)
-  rather than mocking the UI. Provided assets are equally valid inputs.
-
-Net effect: the audience sees the genuine product UI, while Flow supplies only
-the cinematic surround.
-</product_ad_mode>
-
-<commercial_mode>
-For a self-contained 30-second VERTICAL app commercial, `generate_commercial.py`
-is a one-shot path over the same building blocks (no 7-stage orchestrator):
-real product captures + Google Flow B-roll -> concat -> independent ducked
-background music -> Supertonic Korean narration -> one MP4. It shares the
-vendored `google_flow_cli.py`.
-
-```bash
-# Fresh Flow render from product captures (needs an attached Flow browser session)
-python3 scripts/generate_commercial.py \
-  --capture-dir examples/speakcoach/captures \
-  --transcript-file examples/speakcoach/transcript_ko.txt \
-  --run-flow \
-  --flow-project-url "https://labs.google/fx/ko/tools/flow/project/YOUR_FLOW_PROJECT_ID" \
-  --out-dir ./out
-
-# Compose from an existing >=30s Flow hero clip (no Flow submit)
-python3 scripts/generate_commercial.py \
-  --flow-clip ./flow_30s.mp4 --transcript-file ./transcript_ko.txt --out-dir ./out
-```
-
-The bundled `SCENES`/`flow_prompt` are an editable SpeakCoach-style template;
-the GENERIC path is `<product_ad_mode>` above. Fonts resolve cross-platform
-(macOS/Windows/Linux); override with the `COMMERCIAL_FONT` env var. On success it
-prints one JSON line: `{"ok": true, "final": <path>, ...}`. Worked inputs live in
-`examples/speakcoach/` (the rendered demo MP4 is not committed — reproduce it).
-</commercial_mode>
 
 <gates>
 `scripts/stage_gates.py` is the teeth behind "each stage must pass". After every
@@ -240,6 +78,9 @@ forward or uploads:
   and the audio is NOT effectively silent (ffmpeg `volumedetect` mean dBFS above
   the silence threshold). This catches the TTS-silent-failure that the
   `{"tts": true}` flag cannot. `add_narration.py` self-applies the same check.
+- url-ad ingest -> `gate_page_facts`: page_facts.json parses to an object with a
+  non-empty `url`, `title`, `cta_text` and >= 1 `value_props` (the minimum to
+  ground a hook->USP->CTA script).
 
 Fallbacks are opt-in (real generation by default): the synthesized BGM pad needs
 `--allow-synth-bgm`; otherwise a BGM-on run with no real track hard-stops with an
@@ -296,28 +137,41 @@ per-gate `min_duration` / `min_bytes` args.
 </important_constraints>
 
 <files>
+Workflow specs (load per Step 0):
+- `references/workflows/url-ad.md` — paste-a-URL marketing/demo video (the
+  clickcast.tech category); ingest -> grounded hook->USP->CTA script -> real-page
+  B-roll -> narrate. NEW; see its Status table for what is built vs pending.
+- `references/workflows/idea-video.md` — the 7-stage "idea to private YouTube
+  draft" orchestrator flow (the original pipeline).
+- `references/workflows/product-ad.md` — hybrid real-UI + Flow B-roll ad and the
+  one-shot 30s vertical app commercial.
+
+Shared scripts:
 - `scripts/auto_youtube_pipeline.py` — one-command end-to-end orchestrator;
   gates every stage, writes `manifest.json`, stops at the private draft.
 - `scripts/stage_gates.py` — per-stage artifact verification (ffprobe/ffmpeg);
-  raises `GateError` so the orchestrator hard-stops on any degraded output.
-- `scripts/harvest_ideas.py` — Stage 1: Studio inspiration / trending -> ranked
-  ideas via codex.
-- `scripts/make_storyboard.py` — Stage 2: idea -> scene beats + storyboard PNGs.
+  raises `GateError` so the orchestrator hard-stops on any degraded output;
+  includes `gate_page_facts` for the url-ad ingest stage.
+- `scripts/ingest_url.py` — url-ad Stage 0 (SCAFFOLD): CLI + `PAGE_FACTS_SCHEMA`
+  for the page-facts contract; live Playwright capture pending (see url-ad.md).
+- `scripts/harvest_ideas.py` — idea-video Stage 1: Studio inspiration / trending
+  -> ranked ideas via codex.
+- `scripts/make_storyboard.py` — idea-video Stage 2: idea -> scene beats +
+  storyboard PNGs.
 - `scripts/write_script.py` — Stage 3: Korean narration + Flow prompts + YouTube
-  metadata.
+  metadata (will gain page-facts grounding for url-ad).
 - `scripts/generate_video.py` — Stage 4: Flow render via `google_flow_cli.py`
   (call once per scene for a full-length video).
 - `scripts/assemble_flow_video.py` — concat scene clips + delogo + fit to
-  narration + mux into one MP4.
+  narration + mux into one MP4 (real Ken-Burns clips + Flow B-roll).
 - `scripts/build_slideshow.py` — Flow-free fallback: narrated Ken-Burns video
-  from the storyboard stills.
-- `scripts/build_kenburns_clip.py` — product-ad mode: render ONE real product
-  screenshot as a faithful Ken-Burns clip (sharp UI, blurred-cover bg, fixed
-  geometry) so real screens concat with Flow B-roll without being regenerated.
-- `scripts/generate_commercial.py` — commercial mode: one-shot 30s vertical app
-  ad (real product captures + Flow B-roll + independent ducked music + Supertonic
-  Korean TTS). Shares `google_flow_cli.py`; bundled SCENES are an editable
-  SpeakCoach-style template. Worked inputs in `examples/speakcoach/`.
+  from stills (storyboard frames or url-ad screenshots).
+- `scripts/build_kenburns_clip.py` — render ONE real screenshot as a faithful
+  Ken-Burns clip (sharp UI, blurred-cover bg, fixed geometry) so real screens
+  concat with Flow B-roll without being regenerated. Used by product-ad + url-ad.
+- `scripts/generate_commercial.py` — product-ad one-shot 30s vertical app ad.
+  Shares `google_flow_cli.py`; bundled SCENES are an editable template. Worked
+  inputs in `examples/speakcoach/`.
 - `scripts/remove_logo.py` — Stage 5: ffmpeg `delogo` watermark removal.
 - `scripts/add_narration.py` — Stage 6 conductor: per-sentence Supertonic TTS +
   low BGM bed + ducking + selective burned key captions + ffmpeg mux.
@@ -344,7 +198,7 @@ per-gate `min_duration` / `min_bytes` args.
   TTS, real ffmpeg): asserts audio stream, duration, captions, CREDITS handling,
   synth-BGM opt-in, and the no-real-BGM hard stop.
 - `tests/test_stage_gates.py` — gate RED/GREEN proofs on ffmpeg fixtures
-  (good/no-audio/silent/truncated/short) plus the JSON/storyboard gates.
+  (good/no-audio/silent/truncated/short) plus the JSON/storyboard/page-facts gates.
 - `tests/test_pipeline_gates.py` — orchestrator wiring: a degraded artifact
   (junk video / silent narration) hard-stops `run_pipeline` BEFORE upload.
 </files>
@@ -358,13 +212,14 @@ python3 -m pytest -q   # full suite, incl. test_stage_gates + test_pipeline_gate
 ```
 
 The gate suite is the proof that "each stage must pass": `test_stage_gates.py`
-shows each gate RAISES on a degraded artifact (no-audio / silent / truncated)
-and PASSES a real one; `test_pipeline_gates.py` shows a degraded stage output
-hard-stops the orchestrator before upload.
+shows each gate RAISES on a degraded artifact (no-audio / silent / truncated /
+missing page facts) and PASSES a real one; `test_pipeline_gates.py` shows a
+degraded stage output hard-stops the orchestrator before upload.
 
-Validate the full chain without Flow credits or an upload. `--dry-run` uses a 2s
-placeholder clip when no `--video` is supplied; add `--allow-synth-bgm` (no
-Jamendo key) or `--no-bgm`, since BGM-on hard-stops without a real track:
+Reference end-to-end check (idea-video) without Flow credits or an upload.
+`--dry-run` uses a 2s placeholder clip when no `--video` is supplied; add
+`--allow-synth-bgm` (no Jamendo key) or `--no-bgm`, since BGM-on hard-stops
+without a real track:
 
 ```bash
 python3 scripts/auto_youtube_pipeline.py --topic "테스트" --dry-run --allow-synth-bgm
@@ -380,5 +235,6 @@ ffprobe -v error -show_entries format=duration,size \
 ```
 
 Then open `studio_url` from the result JSON in YouTube Studio, verify the draft
-is private with correct title/description, and flip it to public.
+is private with correct title/description, and flip it to public. Per-workflow
+validation (e.g. the url-ad offline gate + CLI checks) lives in each workflow doc.
 </validation>
