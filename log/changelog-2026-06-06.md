@@ -61,3 +61,68 @@ prompt fixes in `references/improvement_log.md`.
   shot). A TTS-first ordering would let visuals span the exact narration.
 - Mix Flow/AI B-roll via `build_kenburns_clip` + `assemble_flow_video` (hybrid),
   currently the product-ad path only.
+
+## url-ad: launch mode (no attach) + first live run
+
+Follow-up the same day. The url-ad ingest should NOT need the user's logged-in
+Chrome — a public page can be captured by a fresh agent browser.
+
+- ingest_url: added `--capture-mode {launch,attach}` (default launch) +
+  `--reuse-session`. `launch` runs `@playwright/cli ... open <url>` to start a
+  fresh Chrome-for-Testing, captures, and closes it — no attach/human step.
+  `attach` keeps the logged-in path for pages behind a login. Orchestrator
+  `stage_ingest` passes `--capture-mode launch`.
+- ingest_url: added `parse_runcode_json` (UTF-8-safe) replacing
+  `google_flow_cli._json_result` for the fetch result — `unicode_escape` mangled
+  Hangul (티스토리 -> mojibake). Tested.
+- ingest_url: fixed `DISTILL_SCHEMA` to list every property in `required`
+  (OpenAI strict structured-output rejects partial `required`); strengthened the
+  distill prompt so `cta_text` is always non-empty (infer the primary action)
+  and features prefer real capabilities over bare nav labels.
+- Docs: SKILL.md `<browser_attach>` now documents launch vs attach;
+  `references/workflows/url-ad.md` Stage 0 + verification updated.
+
+### First live run (tistory.com) — verified
+Produced a real ad: `out/narrated.mp4`, 1080x1920 (9:16), 188.9s, 25.4 MB,
+H.264+AAC; `gate_narration` passed (mean_volume -25.5 dBFS, not silent). The
+codex script was grounded in the real page facts (no invented features), opened
+with the value proposition, and closed on the CTA "티스토리에서, 나를 표현해 보세요."
+
+Environment note: the user's `~/.codex/config.toml` `[agents]` block
+(`model_provider = "headroom"`, scalar keys) is invalid for codex-cli 0.137.0 and
+blocks EVERY codex call (`invalid type: string "headroom", expected struct
+AgentRoleToml`). Worked around non-destructively with an isolated
+`CODEX_HOME=/tmp/codex_home_clean` (copied auth.json + empty config.toml); the
+user should fix the global `[agents]` section for the skill to run normally.
+
+Open refinements surfaced by the run:
+- 3.1-min narration is long for short-form; tighten the script for 9:16 (fewer
+  features, ~30-60s) and capture more screenshots (4 shots -> ~47s each = static).
+- Add a `--no-upload` for url-ad: the run exits 1 at the upload stage when no
+  YouTube token/secret exists, even though the video is already produced.
+
+## url-ad v2: short-form + more shots + real BGM (same day)
+
+Addresses the two issues the first live run surfaced (BGM inaudible; scenes not
+tracking the speech; video too long).
+
+- Short-form scripting: `_urlad_idea_storyboard` now derives one scene per top
+  value prop (cap 5), NOT every feature — so write_script's pacing target drops
+  to ~40s; the grounding prompt also instructs a 30-45s, top-3-4-props narration
+  (no feature enumeration). Result: 188.9s -> 23.2s.
+- More, synced visuals: `stage_ingest` captures `--max-shots 8` (was 4) so the
+  Ken-Burns slideshow changes shots in step with the short narration.
+- Real BGM: with `JAMENDO_CLIENT_ID` set, the BGM stage downloads a real CC-BY
+  track for the script's `bgm_mood` (cached under references/bgm_cache/) and
+  writes `CREDITS.txt` — replacing the near-silent synth sine pad. (Client id is
+  a public identifier; stored as an env var in the user's shell profile, never
+  in code. Jamendo's tracks API needs only the client id, not the secret.)
+- `--no-upload`: `run_pipeline_urlad` skips the upload stage and exits 0 with the
+  local video (the flag already existed for idea-video). url-ad is file-first.
+- ingest_url quality: distill prompt now guarantees a non-empty `cta_text`
+  (inferred if no explicit button) and prefers real capabilities over nav labels.
+
+Second live run (tistory.com): `out/narrated.mp4`, 1080x1920, 23.2s, 8 real page
+screenshots, grounded 4-sentence script ending on the CTA "지금, 나의 티스토리
+보기.", real Jamendo BGM ducked under the narration, clean exit 0. Tests: 126
+passed.

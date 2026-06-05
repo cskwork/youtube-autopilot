@@ -33,9 +33,18 @@ All three share the contracts below (`<browser_attach>`, `<gates>`,
 </workflows>
 
 <browser_attach>
-The browser stages (URL ingest, harvest, Flow video, Studio upload) drive ONE
-logged-in Chrome session via the Playwright agent CLI. Proven setup (Chrome 148,
-macOS):
+Two browser modes via the Playwright agent CLI (`npx @playwright/cli@latest`):
+
+- **launch** (no login, no attach): `... open <url>` starts a FRESH agent
+  browser (Chrome-for-Testing). This is the url-ad ingest default — a public
+  page needs no logged-in session, so `ingest_url.py --capture-mode launch`
+  launches, captures, and closes its own browser. No human attach step.
+- **attach** (logged-in): the stages that need the user's authenticated Google
+  session — harvest (Studio feed), Flow video, Studio upload — drive ONE
+  logged-in Chrome via CDP. url-ad ingest can also use `--capture-mode attach`
+  for pages behind a login.
+
+Proven ATTACH setup (Chrome 148, macOS):
 
 1. Chrome 148 ignores `--remote-debugging-port` on the default profile. Enable
    it via the UI instead: open `chrome://inspect/#remote-debugging` and turn on

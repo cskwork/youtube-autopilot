@@ -111,8 +111,16 @@ def test_urlad_idea_storyboard_derives_scenes(tmp_path):
     idea_file = pipeline._urlad_idea_storyboard(_GOOD_FACTS, paths)
     assert json.loads(idea_file.read_text())["title"] == "Example"
     sb = json.loads((paths["storyboard_dir"] / "storyboard.json").read_text())
-    # 2 value_props + 1 feature -> 3 scenes
-    assert len(sb["scenes"]) == 3
+    # short-form: one scene per value prop only (features do NOT spawn scenes)
+    assert len(sb["scenes"]) == 2
+
+
+def test_urlad_idea_storyboard_caps_scenes_at_five(tmp_path):
+    paths = pipeline.build_paths(tmp_path, "url-ad")
+    facts = {**_GOOD_FACTS, "value_props": [f"prop {i}" for i in range(9)]}
+    pipeline._urlad_idea_storyboard(facts, paths)
+    sb = json.loads((paths["storyboard_dir"] / "storyboard.json").read_text())
+    assert len(sb["scenes"]) == 5
 
 
 # --- wiring ------------------------------------------------------------------

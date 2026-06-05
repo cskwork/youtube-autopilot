@@ -59,7 +59,8 @@ PAGE_FACTS_SCHEMA: dict[str, str] = {
 DISTILL_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["title", "brand", "value_props", "features", "cta_text"],
+    # OpenAI strict structured output requires every property in `required`.
+    "required": ["title", "brand", "value_props", "features", "cta_text", "cta_url", "brand_colors"],
     "properties": {
         "title": {"type": "string"},
         "brand": {"type": "string"},
@@ -111,6 +112,32 @@ def write_screenshots(shots_b64: list[str], shots_dir: Path) -> list[str]:
     return paths
 
 
+def parse_runcode_json(stdout: str | None) -> dict:
+    """Parse the JSON object a run-code page function returned.
+
+    The agent CLI prints the returned string with --raw; depending on version it
+    is a bare JSON object or a JSON string literal wrapping one. Decode via
+    json.loads (UTF-8 safe — never unicode_escape, which mangles Hangul) and peel
+    one string layer if present.
+    """
+    s = (stdout or "").strip()
+    for _ in range(2):
+        try:
+            value = json.loads(s)
+        except json.JSONDecodeError:
+            break
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            s = value
+            continue
+        break
+    start, end = s.find("{"), s.rfind("}")
+    if start != -1 and end > start:
+        return json.loads(s[start : end + 1])
+    raise SystemExit(f"could not parse run-code output: {(stdout or '')[:200]!r}")
+
+
 def build_distill_prompt(facts: dict) -> str:
     """Prompt codex to turn raw page extraction into marketing facts (facts-only)."""
     raw = json.dumps(facts, ensure_ascii=False, indent=2)[:8000]
@@ -122,9 +149,13 @@ def build_distill_prompt(facts: dict) -> str:
         "Keys:\n"
         '- "title": the product/page title.\n'
         '- "brand": the brand or company name.\n'
-        '- "value_props": 2-5 headline benefits, each a short phrase.\n'
-        '- "features": concrete features named on the page (may be empty).\n'
-        '- "cta_text": the primary call-to-action label (e.g. "Start free").\n'
+        '- "value_props": 2-5 headline benefits, each a short phrase (the WHY, '
+        "not menu labels).\n"
+        '- "features": concrete capabilities or benefits named on the page; '
+        "prefer real functionality over bare navigation labels; may be empty.\n"
+        '- "cta_text": the primary call-to-action label (e.g. "Start free"). MUST '
+        "be non-empty; if the page has no explicit CTA button, infer a short "
+        "imperative call to action in the page's own language.\n"
         '- "cta_url": the call-to-action link if identifiable, else "".\n'
         '- "brand_colors": hex colors if identifiable, else [].\n\n'
         f"RAW EXTRACTION:\n{raw}\n"
@@ -153,10 +184,34 @@ def assemble_page_facts(
 
 # --- browser fetch + codex distillation (live) -------------------------------
 
-def fetch_artifacts(args: argparse.Namespace) -> dict:
-    """Attach (unless --no-attach) and run the fetch JS; return {facts, shots}."""
-    if not args.no_attach:
+def _ensure_browser(args: argparse.Namespace) -> None:
+    """Bootstrap the browser session: launch a fresh one (public URLs) or attach.
+
+    Public pages (the url-ad default) need no logged-in session, so 'launch' opens
+    a fresh agent browser (Chrome-for-Testing) — no attach to the user's Chrome.
+    'attach' reuses the user's logged-in Chrome for authenticated pages.
+    """
+    if args.reuse_session:
+        return
+    if args.capture_mode == "attach":
         flow.attach(args)
+    else:
+        flow.run(args, flow.cmd(args, "open", args.url), capture=True)
+
+
+def _close_browser(args: argparse.Namespace) -> None:
+    """Close a browser we launched (never an attached or reused session)."""
+    if args.capture_mode != "launch" or args.reuse_session:
+        return
+    try:
+        flow.run(args, flow.cmd(args, "close"), capture=True)
+    except Exception:  # noqa: BLE001 - best-effort teardown
+        pass
+
+
+def fetch_artifacts(args: argparse.Namespace) -> dict:
+    """Bootstrap the browser and run the fetch JS; return {facts, shots}."""
+    _ensure_browser(args)
     viewport = _VIEWPORTS.get(args.target_format, _VIEWPORTS["vertical"])
     template = (JS / "fetch_url_artifacts.tmpl.js").read_text(encoding="utf-8")
     js = render_fetch_js(template, args.url, args.max_shots, viewport)
@@ -164,7 +219,9 @@ def fetch_artifacts(args: argparse.Namespace) -> dict:
     gen.parent.mkdir(parents=True, exist_ok=True)
     gen.write_text(js, encoding="utf-8")
     proc = flow.run(args, flow.cmd(args, "run-code", "--filename", str(gen), "--raw"), capture=True)
-    result = flow._json_result(proc.stdout, proc.stderr)
+    if proc.stderr:
+        log(proc.stderr.strip()[:500])
+    result = parse_runcode_json(proc.stdout)
     if not result.get("ok"):
         raise SystemExit(f"url fetch failed: {result.get('note') or result}")
     gen.unlink(missing_ok=True)
@@ -223,11 +280,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     # Browser session flags (shared with google_flow_cli's attach/cmd/run helpers).
     p.add_argument("--cli", default="npx @playwright/cli@latest")
     p.add_argument("--npm-cache", default="")
-    p.add_argument("--session", default="vya")
-    p.add_argument("--attach", choices=["cdp", "extension"], default="cdp")
+    p.add_argument("--session", default="urlad")
+    p.add_argument(
+        "--capture-mode", choices=["launch", "attach"], default="launch",
+        help="launch a fresh agent browser (public URLs, no login) or attach to "
+             "the user's logged-in Chrome (authenticated pages)",
+    )
+    p.add_argument("--reuse-session", action="store_true", help="skip bootstrap; reuse an open session")
+    p.add_argument("--attach", choices=["cdp", "extension"], default="cdp", help="attach target (capture-mode=attach)")
     p.add_argument("--cdp-endpoint", default="chrome")
     p.add_argument("--extension-channel", default="chrome")
-    p.add_argument("--no-attach", action="store_true", help="reuse an already-attached session")
     return p.parse_args(argv)
 
 
@@ -236,6 +298,7 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(args.out).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     result = fetch_artifacts(args)
+    _close_browser(args)
     screenshots = write_screenshots(result.get("shots") or [], out.parent / "page_facts_shots")
     distilled = distill_facts(args.codex, result.get("facts") or {})
     page_facts = assemble_page_facts(distilled, result.get("facts") or {}, args.url, screenshots)

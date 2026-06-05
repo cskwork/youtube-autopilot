@@ -80,6 +80,18 @@ def test_assemble_page_facts_falls_back_to_raw_title():
     assert facts["brand"] == "Raw Title"  # brand falls back to title
 
 
+def test_parse_runcode_json_handles_shapes_and_unicode():
+    import json as _json
+    obj = {"ok": True, "facts": {"title": "티스토리"}}
+    # bare object
+    assert ingest_url.parse_runcode_json(_json.dumps(obj, ensure_ascii=False))["facts"]["title"] == "티스토리"
+    # JSON string literal wrapping the object (what run-code --raw can emit)
+    wrapped = _json.dumps(_json.dumps(obj, ensure_ascii=False), ensure_ascii=False)
+    assert ingest_url.parse_runcode_json(wrapped)["facts"]["title"] == "티스토리"
+    # leading log noise before the object
+    assert ingest_url.parse_runcode_json('noise\n' + _json.dumps(obj, ensure_ascii=False))["ok"] is True
+
+
 def test_build_distill_prompt_is_facts_only():
     prompt = ingest_url.build_distill_prompt({"title": "T", "headings": ["H1"]})
     assert "Use ONLY" in prompt

@@ -120,6 +120,9 @@ def _grounding_block(page_facts: Any) -> str:
     parts.append(
         "\nGROUND THE SCRIPT IN THESE FACTS ONLY. Do not invent features, prices, "
         "claims, or product names that are not listed above.\n"
+        "Keep the ENTIRE narration SHORT for a vertical ad: about 30-45 seconds of "
+        "speech. Cover only the strongest 3-4 value propositions; do NOT enumerate "
+        "every feature or menu item.\n"
         "Structure narration as HOOK -> UNIQUE SELLING POINTS -> CALL TO ACTION:\n"
         "1. First ~3s: state the core value proposition (a viewer who sees only "
         "the opening still gets the point).\n"
