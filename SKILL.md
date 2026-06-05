@@ -152,8 +152,9 @@ Shared scripts:
 - `scripts/stage_gates.py` — per-stage artifact verification (ffprobe/ffmpeg);
   raises `GateError` so the orchestrator hard-stops on any degraded output;
   includes `gate_page_facts` for the url-ad ingest stage.
-- `scripts/ingest_url.py` — url-ad Stage 0 (SCAFFOLD): CLI + `PAGE_FACTS_SCHEMA`
-  for the page-facts contract; live Playwright capture pending (see url-ad.md).
+- `scripts/ingest_url.py` — url-ad Stage 0: drive the attached Chrome to fetch
+  Open Graph/meta + readable text + screenshots (`js/fetch_url_artifacts.tmpl.js`),
+  then codex-distill marketing facts into a gated `page_facts.json`.
 - `scripts/harvest_ideas.py` — idea-video Stage 1: Studio inspiration / trending
   -> ranked ideas via codex.
 - `scripts/make_storyboard.py` — idea-video Stage 2: idea -> scene beats +
@@ -187,7 +188,7 @@ Shared scripts:
 - `scripts/get_youtube_token.py` — one-time OAuth consent + token cache.
 - `scripts/google_flow_cli.py` — vendored Flow browser-automation CLI.
 - `scripts/js/` — browser helpers (`studio_inspiration.js`, `flow_*.js`,
-  `studio_upload.tmpl.js`).
+  `studio_upload.tmpl.js`, `fetch_url_artifacts.tmpl.js`).
 - `references/runbook.md` — per-stage operational + debug guide.
 - `references/improvement_log.md` — living log of selector/prompt/failure fixes.
 - `tests/test_remove_logo.py` — delogo box geometry unit tests.
