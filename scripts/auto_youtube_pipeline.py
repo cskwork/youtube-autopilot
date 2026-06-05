@@ -365,7 +365,9 @@ def stage_ingest(args: argparse.Namespace, paths: dict[str, Path]) -> Path:
         "--url", args.url.strip(),
         "--out", str(dest),
         "--target-format", "vertical" if _is_vertical(args.aspect_ratio) else "horizontal",
-        *browser_args(args),
+        "--session", args.session,
+        "--capture-mode", "launch",  # public page: fresh agent browser, no attach
+        "--max-shots", "8",  # more scroll captures -> shots can track the narration
     ]
     run_stage("ingest_url", cmd)
     return dest
@@ -375,9 +377,10 @@ def _urlad_idea_storyboard(page_facts: dict, paths: dict[str, Path]) -> Path:
     """Derive the minimal idea + storyboard write_script needs from page facts."""
     title = str(page_facts.get("title") or page_facts.get("brand") or "product").strip()
     idea_file = write_idea_file({"title": title, "metric": ""}, paths["idea"])
-    items = [str(x).strip() for x in
-             (list(page_facts.get("value_props") or []) + list(page_facts.get("features") or []))
-             if str(x).strip()] or [title]
+    # Short-form: one scene per top value prop (cap 5), NOT every feature, so the
+    # narration stays ~30-45s and the shots can track it. Features still ground
+    # the script via page_facts; they just don't each spawn a scene.
+    items = [str(x).strip() for x in (page_facts.get("value_props") or []) if str(x).strip()][:5] or [title]
     scenes = [
         {"n": i, "beat": "", "visual": item, "camera": "", "on_screen_text": item}
         for i, item in enumerate(items, start=1)
@@ -612,8 +615,12 @@ def run_pipeline_urlad(args: argparse.Namespace, paths: dict[str, Path]) -> dict
     gate("add_narration", lambda: stage_gates.gate_narration(paths["narrated_video"]))
     final_video = paths["narrated_video"].resolve()
 
-    stage_header(5, total, "upload_youtube")
-    upload = stage_upload(args, final_video, script, _bgm_attribution(narration))
+    if getattr(args, "no_upload", False):
+        log(f"[upload] skipped (--no-upload); final video: {final_video}")
+        upload = None
+    else:
+        stage_header(5, total, "upload_youtube")
+        upload = stage_upload(args, final_video, script, _bgm_attribution(narration))
 
     return {
         "ideas": None, "idea": page_facts, "storyboard_dir": paths["storyboard_dir"],

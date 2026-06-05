@@ -36,18 +36,22 @@ capture fidelity and script quality, then log fixes in `improvement_log.md`.
 The video is made FROM the page. Stages 2-4 reuse existing scripts unchanged;
 only Stage 0 and the grounding in Stage 1 are new.
 
-0. **Ingest** (`ingest_url.py`, NEW — Playwright, no paid API): drive the SAME
-   attached Chrome used for Flow/Studio (see `<browser_attach>` in `SKILL.md`)
-   to navigate the URL, extract Open Graph/meta tags + readable page text, and
-   screenshot the page (hero + a few key sections) via `page.evaluate()` +
-   `page.screenshot()`. codex then distills the raw extraction into
-   `page_facts.json` (the schema below). Gate: `gate_page_facts`.
-   - Capture engine decision: reuse existing Playwright automation (the repo
-     already solves attach/CDP/`run-code`); no Firecrawl/Urlbox/fal paid APIs.
-     The new browser helper mirrors the `google_flow_cli.py` template pattern
+0. **Ingest** (`ingest_url.py`, Playwright, no paid API): LAUNCH a fresh agent
+   browser (`--capture-mode launch`, the default) — a public page needs no
+   logged-in session, so there is no attach/human step; `ingest_url` opens its
+   own Chrome-for-Testing, captures, and closes it. Navigate the URL, extract
+   Open Graph/meta + readable text, and screenshot the page while scrolling
+   (`page.evaluate()` + `page.screenshot()`); codex then distills the raw
+   extraction into `page_facts.json` (the schema below). Gate: `gate_page_facts`.
+   - For a page behind a login, use `--capture-mode attach` to drive the user's
+     logged-in Chrome instead (see `<browser_attach>` in `SKILL.md`).
+   - Capture engine decision: reuse the existing Playwright agent CLI (the repo
+     already solves launch/attach/`run-code`); no Firecrawl/Urlbox/fal paid APIs.
+     The browser helper mirrors the `google_flow_cli.py` template pattern
      (`run-code --filename <generated.js>` with JSON-literal placeholder
-     substitution). JS-heavy / auth-gated pages can still fail to render fully;
-     surface a clear error rather than producing thin facts.
+     substitution); the returned JSON is decoded UTF-8-safe (`parse_runcode_json`,
+     NOT unicode_escape, which mangles Hangul). JS-heavy / auth-gated pages can
+     still render incompletely; surface a clear error rather than thin facts.
 1. **Script — grounded + conversion-structured** (`write_script.py`, extended):
    feed `page_facts.json` so codex writes narration CONSTRAINED to the page's
    real facts (no invented features) and on the evidence-backed structure below.
@@ -144,15 +148,20 @@ python3 -m pytest tests/test_stage_gates.py -k page_facts -q   # gate RED/GREEN
 python3 scripts/ingest_url.py --help                           # CLI contract
 ```
 
-End-to-end (next pass, needs an attached Chrome — a human-approved browser run,
-same gate as `idea-video`):
+End-to-end (launches a fresh agent browser for ingest — no attach needed for a
+public page; still needs a logged-in codex and Supertonic for script + TTS):
 
 ```bash
 python3 scripts/auto_youtube_pipeline.py --mode url-ad \
-  --url "https://example.com" --aspect-ratio 9:16 --out-dir ./out
+  --url "https://example.com" --aspect-ratio 9:16 --allow-synth-bgm --out-dir ./out
 ffprobe -v error -show_entries format=duration -show_entries \
   stream=width,height -of default=nw=1 ./out/narrated.mp4
 ```
+
+Add `--dry-run` to skip the upload (the video `./out/narrated.mp4` is produced
+before the upload stage). To re-use already-captured facts and skip ingest, pass
+`--page-facts-json ./out/page_facts.json` (its `page_facts_shots/` must sit
+beside it).
 
 Confirm `page_facts.json` reflects the real page (no invented features), the
 first ~3s states the proposition, an explicit hook lands by ~6s, the CTA matches
