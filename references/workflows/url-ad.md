@@ -12,19 +12,24 @@ already validated the UX (paste URL -> AI scripting -> voice + motion -> multi
 scripting (no invented features), faithful real-page capture as B-roll (vs
 generic stock footage), and caption/pacing tuned to the hook window.
 
-## Status (router + spec pass)
+## Status
 
 | Piece | State |
 |---|---|
 | Workflow spec (this doc) | DONE |
 | `stage_gates.gate_page_facts` + tests | DONE (`tests/test_stage_gates.py`) |
-| `scripts/ingest_url.py` CLI + `PAGE_FACTS_SCHEMA` | SCAFFOLD (live capture pending) |
-| `scripts/js/fetch_url_artifacts.tmpl.js` (browser fetch) | PENDING (next build pass) |
-| `write_script.py` grounding + hook->USP->CTA scaffold | PENDING (next build pass) |
-| `auto_youtube_pipeline.py` `--mode url-ad` dispatcher | PENDING (next build pass) |
+| `write_script.py` grounding + hook->USP->CTA + `--aspect-ratio` | DONE (`tests/test_write_script.py`) |
+| `make_storyboard`/`write_script` aspect-ratio threading | DONE (orchestrator) |
+| `scripts/ingest_url.py` live capture + codex distillation | DONE; pure helpers tested (`tests/test_ingest_url.py`) |
+| `scripts/js/fetch_url_artifacts.tmpl.js` (browser fetch) | DONE |
+| `auto_youtube_pipeline.py` `--mode url-ad` pipeline + gate chain | DONE; wiring tested (`tests/test_pipeline_urlad.py`) |
 
-Until the pending pieces land, this workflow is documentation + a tested gate +
-a scaffolded Stage 0. Do not claim a working URL-to-video run yet.
+Offline-verified: every pure helper + the full gate/stage wiring (with stubbed
+producers) + the slideshow render over real screenshots. NOT yet verified by the
+author: a full LIVE run, which needs an attached, human-approved Chrome (browser
+ingest), a logged-in codex (script + fact distillation), and Supertonic (TTS) —
+the same external dependencies as a real idea-video run. Run it live to confirm
+capture fidelity and script quality, then log fixes in `improvement_log.md`.
 
 ## Pipeline
 
@@ -49,14 +54,15 @@ only Stage 0 and the grounding in Stage 1 are new.
    Output is the existing `script.json` (narration_ko, flow_prompt,
    scene_prompts, bgm_mood, key_sentences, youtube{...}); add aspect-ratio
    awareness and default to 9:16. Gate: `gate_script`.
-2. **Visuals — real page as B-roll**: turn each captured screenshot into a
-   faithful motion clip with `build_kenburns_clip.py` (sharp UI, blurred-cover
-   background, fixed WxH — never sent through a generative model), optionally
-   interleave Flow/AI atmosphere B-roll, then `assemble_flow_video.py` concats
-   to one geometry, delogos Flow clips ONLY, and fits total length to the
-   narration. Flow-free path: `build_slideshow.py` over the screenshots. This is
-   the same hybrid rule as `product-ad`, with the screens captured from the URL
-   instead of supplied. Gate: `gate_video`.
+2. **Visuals — real page as B-roll** (`build_slideshow.py`, implemented default):
+   the captured screenshots (saved as `scene_*.png`) are rendered into a
+   Ken-Burns slideshow sized to an estimate of the narration length; the real
+   pixels are shown faithfully, never sent through a generative model. No Flow
+   and no delogo — the real page IS the visual. Gate: `gate_video`.
+   - Future enhancement: mix Flow/AI atmosphere B-roll by routing each shot
+     through `build_kenburns_clip.py` and concatenating with `assemble_flow_video.py`
+     (delogo Flow clips only) — the same hybrid rule as `product-ad`. Not wired
+     yet; the slideshow path is the current default.
 3. **Narrate + music + captions** (`add_narration.py`, unchanged): per-sentence
    Supertonic TTS + ducked royalty-free BGM + format-aware burned key captions.
    Gate: `gate_narration`.

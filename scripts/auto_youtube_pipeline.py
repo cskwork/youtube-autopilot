@@ -211,6 +211,7 @@ def stage_storyboard(args: argparse.Namespace, ideas: Path, paths: dict[str, Pat
         "--idea-json", str(ideas),
         "--idea-index", str(args.idea_index),
         "--scenes", str(args.scenes),
+        "--aspect", args.aspect_ratio,
         "--out-dir", str(paths["storyboard_dir"]),
     ]
     run_stage("make_storyboard", cmd)
@@ -226,7 +227,11 @@ def stage_script(args: argparse.Namespace, idea_file: Path, paths: dict[str, Pat
         "--storyboard-json", str(paths["storyboard_dir"] / "storyboard.json"),
         "--out", str(paths["script"]),
         "--duration", str(args.duration),
+        "--aspect-ratio", args.aspect_ratio,
     ]
+    page_facts = paths.get("page_facts")
+    if page_facts and Path(page_facts).exists():
+        cmd += ["--page-facts-json", str(page_facts)]
     run_stage("write_script", cmd)
     return paths["script"]
 
@@ -336,6 +341,86 @@ def _upload_auth_args(args: argparse.Namespace) -> list[str]:
     return extra
 
 
+# --- url-ad stages -----------------------------------------------------------
+
+def _is_vertical(aspect_ratio: str) -> bool:
+    return aspect_ratio.replace(" ", "").lower() in ("9:16", "9x16", "vertical")
+
+
+def stage_ingest(args: argparse.Namespace, paths: dict[str, Path]) -> Path:
+    """url-ad Stage 0: ingest the URL into page_facts.json (or adopt a supplied one)."""
+    dest = paths["page_facts"]
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if args.page_facts_json.strip():
+        src = Path(args.page_facts_json).expanduser().resolve()
+        if not src.is_file():
+            raise SystemExit(f"--page-facts-json not found: {src}")
+        if src != dest:
+            dest.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+        log(f"[ingest_url] using supplied page facts {src}")
+        return dest
+    if not args.url.strip():
+        raise SystemExit("--mode url-ad requires --url (or --page-facts-json)")
+    cmd = py("ingest_url.py") + [
+        "--url", args.url.strip(),
+        "--out", str(dest),
+        "--target-format", "vertical" if _is_vertical(args.aspect_ratio) else "horizontal",
+        *browser_args(args),
+    ]
+    run_stage("ingest_url", cmd)
+    return dest
+
+
+def _urlad_idea_storyboard(page_facts: dict, paths: dict[str, Path]) -> Path:
+    """Derive the minimal idea + storyboard write_script needs from page facts."""
+    title = str(page_facts.get("title") or page_facts.get("brand") or "product").strip()
+    idea_file = write_idea_file({"title": title, "metric": ""}, paths["idea"])
+    items = [str(x).strip() for x in
+             (list(page_facts.get("value_props") or []) + list(page_facts.get("features") or []))
+             if str(x).strip()] or [title]
+    scenes = [
+        {"n": i, "beat": "", "visual": item, "camera": "", "on_screen_text": item}
+        for i, item in enumerate(items, start=1)
+    ]
+    sb_dir = paths["storyboard_dir"]
+    sb_dir.mkdir(parents=True, exist_ok=True)
+    (sb_dir / "storyboard.json").write_text(
+        json.dumps({"scenes": scenes, "screenshots": list(page_facts.get("screenshots") or [])},
+                   ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return idea_file
+
+
+def _estimate_narration_seconds(script: Path) -> float:
+    """Rough total length from the narration char count (Korean ~5.5 chars/s)."""
+    try:
+        data = json.loads(Path(script).read_text(encoding="utf-8"))
+        chars = len(str(data.get("narration_ko") or "").strip())
+    except (OSError, json.JSONDecodeError):
+        chars = 0
+    return max(8.0, chars / 5.5)
+
+
+def stage_visuals_slideshow(args: argparse.Namespace, script: Path, paths: dict[str, Path]) -> Path:
+    """url-ad visuals: Ken-Burns slideshow over the captured real-page screenshots."""
+    shots_dir = paths["page_facts"].parent / "page_facts_shots"
+    if not sorted(shots_dir.glob("scene_*.png")):
+        raise SystemExit(
+            f"url-ad: no page screenshots in {shots_dir}; cannot build visuals"
+        )
+    width, height = (1080, 1920) if _is_vertical(args.aspect_ratio) else (1920, 1080)
+    cmd = py("build_slideshow.py") + [
+        "--storyboard-dir", str(shots_dir),
+        "--duration", f"{_estimate_narration_seconds(script):.2f}",
+        "--out", str(paths["raw_video"]),
+        "--width", str(width),
+        "--height", str(height),
+    ]
+    run_stage("build_slideshow", cmd)
+    return paths["raw_video"]
+
+
 # --- manifest ----------------------------------------------------------------
 
 def build_manifest(args: argparse.Namespace, ctx: dict) -> dict:
@@ -415,6 +500,16 @@ def parse_args() -> argparse.Namespace:
 
 
 def _add_core_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--mode", choices=["idea-video", "url-ad"], default="idea-video",
+        help="workflow: idea-video (Studio/topic -> draft) or url-ad (URL -> "
+             "grounded marketing video). product-ad uses generate_commercial.py.",
+    )
+    parser.add_argument("--url", default="", help="url-ad: website/product page URL to ingest")
+    parser.add_argument(
+        "--page-facts-json", default="",
+        help="url-ad: reuse a supplied page_facts.json (skips the live ingest)",
+    )
     parser.add_argument("--topic", default="", help="synthesize ideas around this topic instead of scraping")
     parser.add_argument("--idea-index", type=int, default=0, help="0-based idea to use from the harvest")
     parser.add_argument("--scenes", type=int, default=6, help="storyboard scene count")
@@ -463,9 +558,9 @@ def _add_skip_args(parser: argparse.ArgumentParser) -> None:
 
 # --- run paths ---------------------------------------------------------------
 
-def build_paths(out_dir: Path) -> dict[str, Path]:
+def build_paths(out_dir: Path, mode: str = "idea-video") -> dict[str, Path]:
     """Resolve every artifact path under the run output directory."""
-    return {
+    paths = {
         "ideas": out_dir / "ideas.json",
         "idea": out_dir / "chosen_idea.json",
         "storyboard_dir": out_dir / "storyboard",
@@ -475,11 +570,60 @@ def build_paths(out_dir: Path) -> dict[str, Path]:
         "narrated_video": out_dir / "narrated.mp4",
         "manifest": out_dir / "manifest.json",
     }
+    if mode == "url-ad":
+        paths["page_facts"] = out_dir / "page_facts.json"
+    return paths
 
 
 # --- orchestration -----------------------------------------------------------
 
 def run_pipeline(args: argparse.Namespace, paths: dict[str, Path]) -> dict:
+    """Dispatch to the workflow pipeline by --mode (default idea-video)."""
+    if getattr(args, "mode", "idea-video") == "url-ad":
+        return run_pipeline_urlad(args, paths)
+    return run_pipeline_idea_video(args, paths)
+
+
+def run_pipeline_urlad(args: argparse.Namespace, paths: dict[str, Path]) -> dict:
+    """url-ad: URL -> grounded script -> real-page slideshow -> narration -> upload.
+
+    Reuses the shared stages: write_script (grounded via page_facts),
+    build_slideshow (over the captured screenshots), add_narration, upload. No
+    AI storyboard and no Flow/delogo — the real page IS the visual.
+    """
+    total = 5
+    stage_header(1, total, "ingest_url")
+    page_facts_path = stage_ingest(args, paths)
+    gate("ingest_url", lambda: stage_gates.gate_page_facts(page_facts_path))
+    page_facts = json.loads(page_facts_path.read_text(encoding="utf-8"))
+    idea_file = _urlad_idea_storyboard(page_facts, paths)
+    log(f"[idea] url-ad target: {page_facts.get('title', '')!r}")
+
+    stage_header(2, total, "write_script")
+    script = stage_script(args, idea_file, paths)
+    gate("write_script", lambda: stage_gates.gate_script(script))
+
+    stage_header(3, total, "build_slideshow")
+    raw = stage_visuals_slideshow(args, script, paths)
+    gate("build_slideshow", lambda: stage_gates.gate_video(raw, label="slideshow"))
+
+    stage_header(4, total, "add_narration")
+    narration = stage_narration(args, raw, script, paths)
+    gate("add_narration", lambda: stage_gates.gate_narration(paths["narrated_video"]))
+    final_video = paths["narrated_video"].resolve()
+
+    stage_header(5, total, "upload_youtube")
+    upload = stage_upload(args, final_video, script, _bgm_attribution(narration))
+
+    return {
+        "ideas": None, "idea": page_facts, "storyboard_dir": paths["storyboard_dir"],
+        "script": script, "raw_video": raw, "delogo": {}, "delogo_video": None,
+        "narration": narration, "final_video": final_video, "upload": upload,
+        "page_facts": str(page_facts_path),
+    }
+
+
+def run_pipeline_idea_video(args: argparse.Namespace, paths: dict[str, Path]) -> dict:
     """Execute all stages in order, returning the assembled context dict."""
     total = 7
     stage_header(1, total, "harvest_ideas")
@@ -541,9 +685,11 @@ def print_summary(manifest: dict, manifest_path: Path) -> None:
 
 def main() -> int:
     args = parse_args()
+    if args.mode == "url-ad" and not (args.url.strip() or args.page_facts_json.strip()):
+        raise SystemExit("--mode url-ad requires --url (or --page-facts-json)")
     out_dir = Path(args.out_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    paths = build_paths(out_dir)
+    paths = build_paths(out_dir, args.mode)
     ctx = run_pipeline(args, paths)
     manifest = build_manifest(args, ctx)
     manifest_path = write_manifest(manifest, paths["manifest"])

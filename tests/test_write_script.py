@@ -77,3 +77,53 @@ def test_validate_accepts_empty_key_sentences_list() -> None:
     result = _valid_result()
     result["key_sentences"] = []
     assert validate(result) is None
+
+
+# --- build_prompt: url-ad grounding + aspect note ----------------------------
+
+_IDEA = {"title": "홈카페 레시피"}
+_STORYBOARD = {"scenes": [{"n": 1, "visual": "a"}, {"n": 2, "visual": "b"}]}
+_SCENES = _STORYBOARD["scenes"]
+
+_PAGE_FACTS = {
+    "url": "https://example.com",
+    "title": "Example — make videos from a URL",
+    "brand": "Example",
+    "value_props": ["No editing required", "Paste a URL"],
+    "features": ["120 voices", "Multi-format export"],
+    "cta_text": "Start free",
+}
+
+
+def test_build_prompt_plain_has_no_grounding() -> None:
+    out = write_script.build_prompt(_IDEA, _STORYBOARD, _SCENES, "ko", 8)
+    assert "MARKETING GROUNDING" not in out
+    assert "narration_ko" in out  # base contract intact
+
+
+def test_build_prompt_grounded_includes_facts_and_structure() -> None:
+    out = write_script.build_prompt(
+        _IDEA, _STORYBOARD, _SCENES, "ko", 8,
+        page_facts=_PAGE_FACTS, aspect_ratio="9:16",
+    )
+    assert "MARKETING GROUNDING" in out
+    assert "Example" in out                 # brand/title
+    assert "No editing required" in out      # a value prop
+    assert "Start free" in out               # the CTA
+    assert "HOOK" in out and "CALL TO ACTION" in out
+    assert "Do not invent" in out            # grounding guardrail
+    assert "VERTICAL" in out                 # 9:16 format note
+    assert "key_sentences" in out            # base contract still present
+
+
+def test_build_prompt_aspect_landscape_note() -> None:
+    out = write_script.build_prompt(_IDEA, _STORYBOARD, _SCENES, "ko", 8, aspect_ratio="16:9")
+    assert "VERTICAL" not in out
+    assert "16:9" in out
+
+
+def test_build_prompt_grounded_minimal_facts() -> None:
+    facts = {"url": "u", "title": "T", "value_props": ["only one"], "cta_text": "Go"}
+    out = write_script.build_prompt(_IDEA, _STORYBOARD, _SCENES, "ko", 8, page_facts=facts)
+    assert "only one" in out
+    assert "Go" in out

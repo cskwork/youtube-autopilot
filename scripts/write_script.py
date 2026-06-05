@@ -59,6 +59,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out", default="script.json", help="output script JSON path")
     parser.add_argument("--lang", default="ko", help="narration language code")
     parser.add_argument("--duration", type=int, default=8, help="seconds per scene")
+    parser.add_argument(
+        "--page-facts-json", default="",
+        help="url-ad: page_facts.json to ground the script in (hook->USP->CTA)",
+    )
+    parser.add_argument("--aspect-ratio", default="16:9", help="target aspect ratio (9:16 or 16:9)")
     parser.add_argument("--codex", default="codex", help="codex CLI command")
     return parser.parse_args()
 
@@ -84,20 +89,66 @@ def scene_list(storyboard: Any) -> list[Any]:
     return []
 
 
+def _aspect_note(aspect_ratio: str) -> str:
+    """One-line format hint so codex paces the narration for the target frame."""
+    if aspect_ratio.replace(" ", "").lower() in ("9:16", "9x16", "vertical"):
+        return ("Target format: 9:16 VERTICAL (Shorts/Reels/TikTok). Keep it "
+                "punchy and fast; front-load the hook.\n")
+    return f"Target format: {aspect_ratio} landscape.\n"
+
+
+def _grounding_block(page_facts: Any) -> str:
+    """Marketing grounding for url-ad: facts-only + hook -> USP -> CTA structure."""
+    pf = page_facts if isinstance(page_facts, dict) else {}
+    title = str(pf.get("title") or "").strip()
+    brand = str(pf.get("brand") or title or "the product").strip()
+    url = str(pf.get("url") or "").strip()
+    props = [str(x).strip() for x in (pf.get("value_props") or []) if str(x).strip()]
+    feats = [str(x).strip() for x in (pf.get("features") or []) if str(x).strip()]
+    cta = str(pf.get("cta_text") or "").strip()
+    parts = [
+        "\n=== MARKETING GROUNDING (url-ad) ===",
+        f"This is a marketing/demo video for: {brand}" + (f" - {title}" if title else ""),
+    ]
+    if url:
+        parts.append(f"Source page: {url}")
+    parts.append("Value propositions: " + json.dumps(props, ensure_ascii=False))
+    parts.append("Features: " + json.dumps(feats, ensure_ascii=False))
+    if cta:
+        parts.append(f"Call to action: {cta}")
+    cta_clause = f': "{cta}"' if cta else "."
+    parts.append(
+        "\nGROUND THE SCRIPT IN THESE FACTS ONLY. Do not invent features, prices, "
+        "claims, or product names that are not listed above.\n"
+        "Structure narration as HOOK -> UNIQUE SELLING POINTS -> CALL TO ACTION:\n"
+        "1. First ~3s: state the core value proposition (a viewer who sees only "
+        "the opening still gets the point).\n"
+        "2. Within ~6s: land an explicit hook drawn from the value propositions.\n"
+        "3. Middle: showcase the unique selling points / features above.\n"
+        f"4. End with a clear call to action{cta_clause}\n"
+        "Include the call-to-action sentence in key_sentences."
+    )
+    return "\n".join(parts) + "\n"
+
+
 def build_prompt(
-    idea: Any, storyboard: Any, scenes: list[Any], lang: str, duration: int
+    idea: Any, storyboard: Any, scenes: list[Any], lang: str, duration: int,
+    page_facts: Any = None, aspect_ratio: str = "16:9",
 ) -> str:
     count = max(len(scenes), 1)
     target_seconds = duration * count
     idea_text = json.dumps(idea, ensure_ascii=False, indent=2)
     story_text = json.dumps(storyboard, ensure_ascii=False, indent=2)
+    grounding = _grounding_block(page_facts) if page_facts else ""
     return (
         "You are a YouTube short-form director and Korean copywriter.\n"
         "Given a video IDEA and a STORYBOARD, produce a production script as "
         "STRICT JSON only (no prose, no markdown fences).\n\n"
         f"Language for narration: {lang}.\n"
         f"Scene count: {count}. Each scene runs about {duration} seconds, so "
-        f"narration must be paced to roughly {target_seconds} seconds total.\n\n"
+        f"narration must be paced to roughly {target_seconds} seconds total.\n"
+        f"{_aspect_note(aspect_ratio)}"
+        f"{grounding}\n"
         "Output keys and rules:\n"
         '- "narration_ko": one spoken script using short natural Hangul '
         "sentences that read cleanly for TTS; no English, no emoji, no stage "
@@ -222,7 +273,13 @@ def main() -> int:
     idea = load_json(Path(args.idea_json).resolve())
     storyboard = load_json(Path(args.storyboard_json).resolve())
     scenes = scene_list(storyboard)
-    prompt = build_prompt(idea, storyboard, scenes, args.lang, args.duration)
+    page_facts = None
+    if args.page_facts_json.strip():
+        page_facts = load_json(Path(args.page_facts_json).resolve())
+    prompt = build_prompt(
+        idea, storyboard, scenes, args.lang, args.duration,
+        page_facts=page_facts, aspect_ratio=args.aspect_ratio,
+    )
     raw = codex_text(args.codex, prompt)
     result = extract_json(raw)
     validate(result)
