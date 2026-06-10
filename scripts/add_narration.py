@@ -96,6 +96,12 @@ def _add_caption_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-captions", type=int, default=8, help="max captioned sentences")
     parser.add_argument("--max-caption-chars", type=int, default=60,
                         help="reserved: max chars per caption line")
+    parser.add_argument("--caption-coverage", choices=("key", "all"), default="key",
+                        help="'key' = selective variety captions (default); 'all' = "
+                             "caption EVERY sentence (short-form ad mode)")
+    parser.add_argument("--brand-colors", default="",
+                        help="comma-separated '#RRGGBB' brand colors for caption "
+                             "accents (url-ad: from page_facts.brand_colors)")
     parser.set_defaults(subtitles_on=True)
 
 
@@ -200,7 +206,10 @@ def synth_with_captions(args: argparse.Namespace, text: str, keys, work_dir: Pat
         speed=args.speed, steps=args.steps, work_dir=work_dir / "segments",
     )
     narration = subtitles.concat_wavs([s.wav for s in segments], work_dir / "narration.wav")
-    key_idx = subtitles.select_key_indices(sentences, keys, max_count=args.max_captions)
+    key_idx = subtitles.select_key_indices(
+        sentences, keys, max_count=args.max_captions,
+        coverage=getattr(args, "caption_coverage", "key"),
+    )
     return narration, segments, key_idx
 
 
@@ -222,17 +231,20 @@ def emphasis_terms(fields: dict) -> list[str] | None:
 
 def write_captions(segments, key_idx, out_dir: Path,
                    width: int = 1280, height: int = 720,
-                   emphasis: list[str] | None = None) -> dict[str, object]:
+                   emphasis: list[str] | None = None,
+                   brand_colors: list[str] | None = None) -> dict[str, object]:
     """Persist .srt + .ass sidecars beside the output; return their paths.
 
     ``width``/``height`` are the real video frame size so captions size to the
     format (9:16 Shorts vs 16:9 standard); ``emphasis`` highlights key terms
-    variety-show style. See ``subtitles.build_ass`` / ``_ass_header``.
+    variety-show style; ``brand_colors`` swap in brand accent colours when
+    legible. See ``subtitles.build_ass`` / ``_ass_header``.
     """
     srt = out_dir / "captions.srt"
     ass = out_dir / "captions.ass"
     srt.write_text(subtitles.build_srt(segments, key_idx), encoding="utf-8")
-    ass.write_text(subtitles.build_ass(segments, key_idx, width, height, emphasis),
+    ass.write_text(subtitles.build_ass(segments, key_idx, width, height, emphasis,
+                                       brand_colors=brand_colors),
                    encoding="utf-8")
     return {"srt": str(srt), "ass": str(ass), "key_count": len(key_idx)}
 
@@ -338,8 +350,9 @@ def conduct(args: argparse.Namespace, src: Path, out: Path) -> int:
             narration, segments, key_idx = synth_with_captions(args, text, fields["key_sentences"], work)
             vw = int(_probe(src, "stream=width", "v:0") or 1280)
             vh = int(_probe(src, "stream=height", "v:0") or 720)
+            brand = [c.strip() for c in getattr(args, "brand_colors", "").split(",") if c.strip()]
             captions = write_captions(segments, key_idx, out.parent, vw, vh,
-                                      emphasis_terms(fields))
+                                      emphasis_terms(fields), brand or None)
             burn_ass = str(captions["ass"])
         else:
             narration = synth_whole(args, text, work)

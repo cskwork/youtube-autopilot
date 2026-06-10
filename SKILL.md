@@ -90,6 +90,11 @@ forward or uploads:
 - url-ad ingest -> `gate_page_facts`: page_facts.json parses to an object with a
   non-empty `url`, `title`, `cta_text` and >= 1 `value_props` (the minimum to
   ground a hook->USP->CTA script).
+- url-ad script -> `gate_ad_quality`: the deterministic ad-structure floor on
+  script.json — opening sentence within the ~3.5s hook speech window, total
+  narration inside the 12-60s short-form budget, every key sentence verbatim in
+  narration_ko, and the closing CTA sentence present in key_sentences (so it
+  burns on screen). A weak ad script never reaches the render stages.
 
 Fallbacks are opt-in (real generation by default): the synthesized BGM pad needs
 `--allow-synth-bgm`; otherwise a BGM-on run with no real track hard-stops with an
@@ -148,8 +153,14 @@ per-gate `min_duration` / `min_bytes` args.
 <files>
 Workflow specs (load per Step 0):
 - `references/workflows/url-ad.md` — paste-a-URL marketing/demo video (the
-  clickcast.tech category); ingest -> grounded hook->USP->CTA script -> real-page
-  B-roll -> narrate. NEW; see its Status table for what is built vs pending.
+  clickcast.tech category); ingest -> creative direction -> grounded
+  hook->USP->CTA script (ad-quality gated) -> scene-per-sentence real-UI
+  B-roll (interactive feature capture + content crops, slideshow fallback) ->
+  full-coverage brand-accented captions. See its Status table for what is
+  built vs pending.
+- `references/ad-creative.md` — url-ad creative direction system (superdesign
+  pattern): brief read, dated trend pulse (snapshot fallback), ad style family
+  routing + dials, ad-copy anti-slop rules, gate + independent-critic verify.
 - `references/workflows/idea-video.md` — the 7-stage "idea to private YouTube
   draft" orchestrator flow (the original pipeline).
 - `references/workflows/product-ad.md` — hybrid real-UI + Flow B-roll ad and the
@@ -160,7 +171,8 @@ Shared scripts:
   gates every stage, writes `manifest.json`, stops at the private draft.
 - `scripts/stage_gates.py` — per-stage artifact verification (ffprobe/ffmpeg);
   raises `GateError` so the orchestrator hard-stops on any degraded output;
-  includes `gate_page_facts` for the url-ad ingest stage.
+  includes `gate_page_facts` (url-ad ingest) and `gate_ad_quality` (url-ad
+  script structure: hook window, duration budget, captioned CTA).
 - `scripts/ingest_url.py` — url-ad Stage 0: drive the attached Chrome to fetch
   Open Graph/meta + readable text + screenshots (`js/fetch_url_artifacts.tmpl.js`),
   then codex-distill marketing facts into a gated `page_facts.json`.
@@ -177,8 +189,10 @@ Shared scripts:
 - `scripts/build_slideshow.py` — Flow-free fallback: narrated Ken-Burns video
   from stills (storyboard frames or url-ad screenshots).
 - `scripts/build_kenburns_clip.py` — render ONE real screenshot as a faithful
-  Ken-Burns clip (sharp UI, blurred-cover bg, fixed geometry) so real screens
-  concat with Flow B-roll without being regenerated. Used by product-ad + url-ad.
+  Ken-Burns clip (sharp UI, blurred-cover bg, fixed geometry, auto fit axis so
+  wide content crops fit by width) so real screens concat with Flow B-roll
+  without being regenerated. Used by product-ad + url-ad; the url-ad preferred
+  visuals path renders one clip per narration sentence (see the workflow doc).
 - `scripts/generate_commercial.py` — product-ad one-shot 30s vertical app ad.
   Shares `google_flow_cli.py`; bundled SCENES are an editable template. Worked
   inputs in `examples/speakcoach/`.

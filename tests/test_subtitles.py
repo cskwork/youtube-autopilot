@@ -71,6 +71,14 @@ def test_key_verbatim_match_whitespace_robust() -> None:
     assert idx == [1, 2]
 
 
+def test_key_substring_of_sentence_matches() -> None:
+    # codex often trims lead-in words ("넷째,") from a key sentence; the
+    # containing sentence still gets the caption slot.
+    sentences = ["첫째, 그림 보고 따라 말해요.", "넷째, AI와 자유롭게 대화해요."]
+    idx = select_key_indices(sentences, ["AI와 자유롭게 대화해요."], max_count=10)
+    assert idx == [1]
+
+
 def test_key_heuristic_when_absent() -> None:
     sentences = [f"문장{i}." for i in range(10)]
     idx = select_key_indices(sentences, None, max_count=10)
@@ -187,3 +195,35 @@ def test_burn_vf_escapes_path() -> None:
     vf = burn_vf("/tmp/some dir/captions.ass")
     assert vf.startswith("ass=")
     assert "captions.ass" in vf
+
+
+# --- full-coverage captions (url-ad shorts) -----------------------------------
+
+def test_coverage_all_captions_every_sentence() -> None:
+    sentences = [f"문장{i}." for i in range(7)]
+    idx = select_key_indices(sentences, None, max_count=3, coverage="all")
+    assert idx == list(range(7))  # every sentence, max_count not applied
+
+
+def test_coverage_key_remains_default_behaviour() -> None:
+    sentences = [f"문장{i}." for i in range(7)]
+    assert (select_key_indices(sentences, None, max_count=3)
+            == select_key_indices(sentences, None, max_count=3, coverage="key"))
+
+
+# --- brand-colored accents ----------------------------------------------------
+
+def test_brand_colors_override_accent() -> None:
+    segs = _segs()
+    ass = build_ass(segs, [0, 1], width=1080, height=1920,
+                    brand_colors=["#E94560"])
+    # RGB E9,45,60 -> ASS &HBBGGRR& literal
+    assert "&H6045E9&" in ass
+
+
+def test_brand_colors_skip_dark_and_invalid_then_fall_back() -> None:
+    segs = _segs()
+    ass = build_ass(segs, [0], width=1080, height=1920,
+                    brand_colors=["#0a0a0a", "not-a-color"])
+    # both unusable on video -> default preset accents (yellow 255,222,0 first)
+    assert "&H00DEFF&" in ass

@@ -199,3 +199,80 @@ def test_gate_page_facts_fails_non_object(tmp_path):
     arr.write_text(json.dumps(["not", "an", "object"]), encoding="utf-8")
     with pytest.raises(GateError, match="object"):
         stage_gates.gate_page_facts(arr)
+
+
+# --- ad-quality gate (URL-AD Stage 1 script structure) ------------------------
+
+def _ad_script(tmp_path, name="script.json", **over):
+    """A hook->USP->CTA script that satisfies the ad-quality defaults."""
+    data = {
+        "narration_ko": (
+            "영상 광고, 3초면 끝나요. "
+            "링크만 붙여넣으면 페이지가 그대로 광고가 됩니다. "
+            "편집도 녹화도 필요 없습니다. "
+            "지금 무료로 시작하세요."
+        ),
+        "flow_prompt": "cinematic product b-roll",
+        "key_sentences": ["영상 광고, 3초면 끝나요.", "지금 무료로 시작하세요."],
+    }
+    data.update(over)
+    path = tmp_path / name
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def test_gate_ad_quality_passes_good_script(tmp_path):
+    info = stage_gates.gate_ad_quality(_ad_script(tmp_path))
+    assert info["sentences"] == 4
+    assert info["est_hook_s"] <= 3.5
+    assert info["est_total_s"] >= 12.0
+
+
+def test_gate_ad_quality_fails_slow_hook(tmp_path):
+    # An opening sentence far beyond the ~3s speech budget buries the hook.
+    slow = ("이 영상에서는 저희가 오랫동안 준비해 온 아주 다양한 기능들을 "
+            "하나하나 차근차근 자세하게 모두 소개해 드리려고 합니다. "
+            "지금 무료로 시작하세요.")
+    path = _ad_script(tmp_path, "slow.json", narration_ko=slow,
+                      key_sentences=["지금 무료로 시작하세요."])
+    with pytest.raises(GateError, match="hook"):
+        stage_gates.gate_ad_quality(path)
+
+
+def test_gate_ad_quality_fails_outside_duration_budget(tmp_path):
+    path = _ad_script(tmp_path)
+    with pytest.raises(GateError, match="duration"):
+        stage_gates.gate_ad_quality(path, max_total_s=5.0)
+    with pytest.raises(GateError, match="duration"):
+        stage_gates.gate_ad_quality(path, min_total_s=120.0)
+
+
+def test_gate_ad_quality_fails_without_key_sentences(tmp_path):
+    path = _ad_script(tmp_path, "nokeys.json", key_sentences=[])
+    with pytest.raises(GateError, match="key_sentences"):
+        stage_gates.gate_ad_quality(path)
+
+
+def test_gate_ad_quality_accepts_substring_keys(tmp_path):
+    # Keys trimmed of lead-in words still match their containing sentence,
+    # mirroring the caption matcher's containment rule.
+    path = _ad_script(tmp_path, "substr.json",
+                      key_sentences=["3초면 끝나요.", "무료로 시작하세요."])
+    info = stage_gates.gate_ad_quality(path)
+    assert info["key_sentences"] == 2
+
+
+def test_gate_ad_quality_fails_non_verbatim_key_sentence(tmp_path):
+    # A paraphrased key sentence would never match a caption slot.
+    path = _ad_script(tmp_path, "paraphrase.json",
+                      key_sentences=["광고가 3초만에 완성됩니다."])
+    with pytest.raises(GateError, match="verbatim"):
+        stage_gates.gate_ad_quality(path)
+
+
+def test_gate_ad_quality_fails_when_cta_not_captioned(tmp_path):
+    # The closing CTA sentence must be in key_sentences so it burns on screen.
+    path = _ad_script(tmp_path, "nocta.json",
+                      key_sentences=["영상 광고, 3초면 끝나요."])
+    with pytest.raises(GateError, match="CTA"):
+        stage_gates.gate_ad_quality(path)

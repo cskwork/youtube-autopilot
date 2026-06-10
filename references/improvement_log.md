@@ -27,6 +27,35 @@ Track changes to codex prompts: script generation (Korean tone, length, hook),
 metadata (title/description/tags), and storyboard image prompts. Record the
 before/after intent and the observed quality delta.
 
+- 2026-06-10 — First live url-ad run (eng-stt-module.vercel.app): `gate_ad_quality`
+  caught a buried hook on attempt 1 (opening sentence ~5.3s of speech > 3.5s
+  window) and hard-stopped before render — folding the gate message into
+  `--style-direction` ("첫 문장은 18자 이내의 초강력 훅") fixed it on attempt 2
+  (hook 2.18s, total 28.2s). Lesson: the style direction should ALWAYS state an
+  explicit opening-sentence char budget (~18자) for 9:16 ads.
+- 2026-06-10 — codex trims lead-in ordinals ("넷째,") when copying key_sentences,
+  so exact-equality matching rejected a valid key. Fixed in code, not prompt:
+  `subtitles._match_verbatim` and `gate_ad_quality` now use containment matching
+  (normalized key substring of a sentence). Prompts need no change.
+- 2026-06-10 — A short single-page menu site yields near-identical screenshots,
+  so the 9:16 slideshow shows mostly empty background below the content.
+  Candidate improvement (TODO): crop each shot to its content bounding box (or
+  capture per-section element shots) before Ken-Burns.
+- 2026-06-10 (v2, user feedback "포커스 안 맞고 dynamic 없음") — Fix shipped for
+  the above: (1) INTERACTIVE capture — a run-code script that clicks into each
+  menu card (and one level deeper: topic -> exercise, role -> conversation,
+  plus typing a sample draft into forms) captures the real feature screens a
+  scrolling capture never sees; (2) crop each shot to its content region, then
+  render ONE Ken-Burns clip PER NARRATION SENTENCE with the per-sentence
+  durations from captions.srt and alternating --reverse pan, concat, and re-run
+  add_narration — every sentence now shows its matching screen; (3)
+  `build_kenburns_clip.build_filter` gained auto fit-axis (`src_aspect`): wide
+  content crops fit by WIDTH (height-fit blew them past the frame),
+  tested in tests/test_kenburns.py. Result: content fills the frame over a
+  blurred depth bg, cuts every ~2.5s, narration-visual sync throughout.
+  TODO: fold this "scene-per-sentence from interactive captures" path into
+  the orchestrator as a first-class url-ad visuals mode.
+
 - 2026-06-03 — Storyboard character consistency: a fixed style suffix plus an explicit "same main character / palette / world" clause in every scene image prompt kept the same person, outfit, and kitchen across scenes 1-3 (verified on real gen.sh output). Carry the same character description into each Flow `scene_prompts[i]` so the motion clips stay consistent too.
 - 2026-06-03 — Title for reach: codex's literal title is fine, but a curiosity-gap hook ("아침에 휴대폰부터 보지 마세요 (집중력 3분 리셋)") reads more clickable. Consider asking codex for 3 viral title variants and picking one.
 - 2026-06-03 — Stage 6 now emits `bgm_mood` (short English keywords) + `key_sentences` (2-4 verbatim narration sentences) from `write_script.py`. `bgm_mood` drives the music search; `key_sentences` drive the selective burned captions. Old `script.json` without these fields still runs: mood derives from youtube tags+title (else "calm ambient"), key sentences fall back to a sparse first+every-3rd heuristic.

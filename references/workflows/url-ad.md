@@ -23,6 +23,11 @@ generic stock footage), and caption/pacing tuned to the hook window.
 | `scripts/ingest_url.py` live capture + codex distillation | DONE; pure helpers tested (`tests/test_ingest_url.py`) |
 | `scripts/js/fetch_url_artifacts.tmpl.js` (browser fetch) | DONE |
 | `auto_youtube_pipeline.py` `--mode url-ad` pipeline + gate chain | DONE; wiring tested (`tests/test_pipeline_urlad.py`) |
+| Creative direction system (`references/ad-creative.md`) + `--style-direction` | DONE (`tests/test_write_script.py`) |
+| `stage_gates.gate_ad_quality` (hook/duration/captioned-CTA) + chain wiring | DONE (`tests/test_stage_gates.py`, `tests/test_pipeline_urlad.py`) |
+| Full-coverage captions + brand-color accents (`--caption-coverage all`, `--brand-colors`) | DONE (`tests/test_subtitles.py`, `tests/test_pipeline_urlad.py`) |
+| Ken-Burns auto fit axis for wide content crops | DONE (`tests/test_kenburns.py`) |
+| Scene-per-sentence visuals (interactive capture + crop + sync) | DONE as an agent-driven path (worked example `out/engstt-ad`, user-validated); orchestrator wiring TODO |
 
 Offline-verified: every pure helper + the full gate/stage wiring (with stubbed
 producers) + the slideshow render over real screenshots. NOT yet verified by the
@@ -52,24 +57,62 @@ only Stage 0 and the grounding in Stage 1 are new.
      substitution); the returned JSON is decoded UTF-8-safe (`parse_runcode_json`,
      NOT unicode_escape, which mangles Hangul). JS-heavy / auth-gated pages can
      still render incompletely; surface a clear error rather than thin facts.
+0.5. **Creative direction** (`references/ad-creative.md`, agent step, no code):
+   read the brief from `page_facts.json` (one line), pulse current short-form
+   ad trends (dated; baked snapshot fallback), route to ONE ad style family
+   (problem-solution / demo-forward / listicle / before-after / question-hook)
+   and declare the dials (energy, caption coverage, pacing, formality). Pass
+   the routed direction via `--style-direction` so codex writes inside it.
 1. **Script — grounded + conversion-structured** (`write_script.py`, extended):
    feed `page_facts.json` so codex writes narration CONSTRAINED to the page's
-   real facts (no invented features) and on the evidence-backed structure below.
-   Output is the existing `script.json` (narration_ko, flow_prompt,
-   scene_prompts, bgm_mood, key_sentences, youtube{...}); add aspect-ratio
-   awareness and default to 9:16. Gate: `gate_script`.
-2. **Visuals — real page as B-roll** (`build_slideshow.py`, implemented default):
-   the captured screenshots (saved as `scene_*.png`) are rendered into a
-   Ken-Burns slideshow sized to an estimate of the narration length; the real
-   pixels are shown faithfully, never sent through a generative model. No Flow
-   and no delogo — the real page IS the visual. Gate: `gate_video`.
-   - Future enhancement: mix Flow/AI atmosphere B-roll by routing each shot
-     through `build_kenburns_clip.py` and concatenating with `assemble_flow_video.py`
-     (delogo Flow clips only) — the same hybrid rule as `product-ad`. Not wired
-     yet; the slideshow path is the current default.
-3. **Narrate + music + captions** (`add_narration.py`, unchanged): per-sentence
-   Supertonic TTS + ducked royalty-free BGM + format-aware burned key captions.
-   Gate: `gate_narration`.
+   real facts (no invented features) and on the evidence-backed structure below,
+   inside the routed creative direction. Output is the existing `script.json`
+   (narration_ko, flow_prompt, scene_prompts, bgm_mood, key_sentences,
+   youtube{...}); aspect-ratio aware, default 9:16. Gates: `gate_script` then
+   `gate_ad_quality` — the deterministic ad floor (opening sentence inside the
+   ~3.5s hook speech window, total inside the 12-60s short-form budget, every
+   key sentence verbatim in the narration, the closing CTA sentence captioned).
+   A weak script hard-stops BEFORE any render. On gate failure, fix the script
+   (re-run codex with the gate's message folded into `--style-direction`) and
+   re-gate; after 3 failures stop and report — never ship around the gate.
+   An independent critic pass (fresh re-read; `ad-creative.md` section F)
+   covers what the gate cannot: claim-by-claim grounding and energy match.
+2. **Visuals — scene-per-sentence real-UI B-roll** (PREFERRED; user-validated
+   2026-06-10): real pixels only, never re-rendered by a generative model.
+   No Flow, no delogo. Gate: `gate_video`. Build it in four steps:
+   1. **Interactive capture**: scrolling screenshots of a short page are five
+      copies of the same menu — instead, drive the launched browser with a
+      one-off `run-code` script (mirror `out/<run>/_capture_features*.run.js`
+      from the worked example; same `flow.cmd`/`run-code --filename` pattern
+      as ingest) that CLICKS into each feature and one level deeper (topic ->
+      exercise screen, role pick -> conversation), and TYPES a plausible
+      sample into empty forms so screens look in-use. Capture at a mobile
+      viewport (~720px) so layouts compact.
+   2. **Content crop**: crop each shot to its content region (cut empty
+      page background, error toasts, dead whitespace) so the product fills
+      the frame; `build_kenburns_clip` lays the sharp crop over a blurred
+      depth background (auto fit axis: wide crops fit by width).
+   3. **Scene-per-sentence sync**: one Ken-Burns clip PER NARRATION SENTENCE,
+      each clip's duration taken from the per-sentence caption timings
+      (captions.srt of a previous narration pass, or the TTS segment times),
+      pan direction alternating per scene (`--reverse` on odd scenes), then
+      ffmpeg-concat. Every sentence shows the screen it talks about and a cut
+      lands every ~2-3s — this sync is what makes the ad read as dynamic.
+   4. Map scenes to the script structure: hook -> menu/hero, each USP ->
+      its feature screen (in narration order), CTA -> the screen the
+      `cta_text` points at.
+   - Fallback (`build_slideshow.py`, orchestrator default `--mode url-ad`):
+     plain Ken-Burns slideshow over the scrolling ingest screenshots, sized to
+     the narration estimate. Acceptable for long content-rich pages; weak for
+     short menu-like pages. Orchestrator wiring of the preferred path is a
+     TODO (`improvement_log.md`).
+3. **Narrate + music + captions** (`add_narration.py`): per-sentence Supertonic
+   TTS + ducked royalty-free BGM + format-aware burned captions. url-ad runs
+   FULL-coverage captions (`--caption-coverage all` — every sentence burned,
+   sound-off viewers carried) with brand-color accents from
+   `page_facts.brand_colors` (`--brand-colors`; too-dark colors are skipped
+   for legibility). The orchestrator wires both automatically
+   (`_urlad_caption_args`). Gate: `gate_narration`.
 4. **Output**: a file by default (`narrated.mp4` + sidecars). Upload is optional
    and reuses Stage 7 (`upload_youtube*.py`), private-by-default, same human
    publish gate as `idea-video`.
@@ -144,8 +187,9 @@ we deliberately did NOT adopt this pass).
 Offline, now:
 
 ```bash
-python3 -m pytest tests/test_stage_gates.py -k page_facts -q   # gate RED/GREEN
-python3 scripts/ingest_url.py --help                           # CLI contract
+python3 -m pytest tests/test_stage_gates.py -k "page_facts or ad_quality" -q  # gates RED/GREEN
+python3 -m pytest tests/test_subtitles.py -k "coverage or brand" -q           # caption modes
+python3 scripts/ingest_url.py --help                                          # CLI contract
 ```
 
 End-to-end (launches a fresh agent browser for ingest — no attach needed for a

@@ -50,7 +50,20 @@ def _urlad_args() -> argparse.Namespace:
     return argparse.Namespace(mode="url-ad")
 
 
-def _install_stubs(monkeypatch, paths, *, facts, video_builder, calls):
+_AD_SCRIPT = {
+    "narration_ko": (
+        "영상 광고, 3초면 끝나요. "
+        "링크만 붙여넣으면 페이지가 그대로 광고가 됩니다. "
+        "편집도 녹화도 필요 없습니다. "
+        "지금 무료로 시작하세요."
+    ),
+    "flow_prompt": "x",
+    "key_sentences": ["영상 광고, 3초면 끝나요.", "지금 무료로 시작하세요."],
+}
+
+
+def _install_stubs(monkeypatch, paths, *, facts, video_builder, calls,
+                   script_data=None):
     def ingest(args, p):
         paths["page_facts"].parent.mkdir(parents=True, exist_ok=True)
         paths["page_facts"].write_text(json.dumps(facts), encoding="utf-8")
@@ -58,7 +71,7 @@ def _install_stubs(monkeypatch, paths, *, facts, video_builder, calls):
 
     def script(args, idea_file, p):
         paths["script"].write_text(
-            json.dumps({"narration_ko": "안녕하세요. 반갑습니다.", "flow_prompt": "x"}),
+            json.dumps(script_data or _AD_SCRIPT, ensure_ascii=False),
             encoding="utf-8",
         )
         return paths["script"]
@@ -67,7 +80,8 @@ def _install_stubs(monkeypatch, paths, *, facts, video_builder, calls):
         video_builder(paths["raw_video"])
         return paths["raw_video"]
 
-    def narration(args, raw, scr, p):
+    def narration(args, raw, scr, p, caption_args=None):
+        calls["caption_args"] = caption_args
         _good_video(paths["narrated_video"])
         return {"out": str(paths["narrated_video"]), "bgm": None}
 
@@ -127,10 +141,13 @@ def test_urlad_idea_storyboard_caps_scenes_at_five(tmp_path):
 
 def test_urlad_happy_path_reaches_upload(tmp_path, monkeypatch):
     paths = pipeline.build_paths(tmp_path, "url-ad")
-    calls = {"upload": False}
+    calls: dict[str, object] = {"upload": False}
     _install_stubs(monkeypatch, paths, facts=_GOOD_FACTS, video_builder=_good_video, calls=calls)
     pipeline.run_pipeline(_urlad_args(), paths)
     assert calls["upload"] is True
+    # the url-ad chain always requests full-coverage captions
+    caption_args = list(calls["caption_args"])  # type: ignore[call-overload]
+    assert caption_args[:2] == ["--caption-coverage", "all"]
 
 
 def test_urlad_bad_page_facts_hard_stops_before_script(tmp_path, monkeypatch):
@@ -141,3 +158,47 @@ def test_urlad_bad_page_facts_hard_stops_before_script(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="GATE FAILED after 'ingest_url'"):
         pipeline.run_pipeline(_urlad_args(), paths)
     assert calls["upload"] is False
+
+
+def test_urlad_weak_ad_script_hard_stops_before_visuals(tmp_path, monkeypatch):
+    """A script without key_sentences (no captionable hook/CTA) fails ad_quality."""
+    paths = pipeline.build_paths(tmp_path, "url-ad")
+    calls = {"upload": False}
+    weak = {**_AD_SCRIPT, "key_sentences": []}
+    _install_stubs(monkeypatch, paths, facts=_GOOD_FACTS, video_builder=_good_video,
+                   calls=calls, script_data=weak)
+    with pytest.raises(SystemExit, match="GATE FAILED after 'ad_quality'"):
+        pipeline.run_pipeline(_urlad_args(), paths)
+    assert calls["upload"] is False
+
+
+def test_urlad_narration_gets_full_captions_and_brand_colors(tmp_path, monkeypatch):
+    """url-ad narration must caption EVERY sentence and pass brand accents."""
+    captured: dict[str, list[str]] = {}
+
+    def fake_run_stage(name, cmd):
+        captured[name] = [str(c) for c in cmd]
+        return {}
+
+    monkeypatch.setattr(pipeline, "run_stage", fake_run_stage)
+    args = argparse.Namespace(voice="F1", no_bgm=True, no_subtitles=False,
+                              allow_synth_bgm=False, bgm="")
+    pipeline.stage_narration(
+        args, tmp_path / "in.mp4", tmp_path / "script.json",
+        {"narrated_video": tmp_path / "narrated.mp4"},
+        caption_args=["--caption-coverage", "all", "--brand-colors", "#e94560"],
+    )
+    cmd = captured["add_narration"]
+    assert "--caption-coverage" in cmd and "all" in cmd
+    assert "--brand-colors" in cmd and "#e94560" in cmd
+
+
+def test_urlad_caption_args_derives_from_page_facts():
+    """Coverage is always 'all'; brand colors flow through when present."""
+    with_colors = pipeline._urlad_caption_args(
+        {**_GOOD_FACTS, "brand_colors": ["#1a1a2e", "#e94560"]})
+    assert with_colors[:2] == ["--caption-coverage", "all"]
+    assert "--brand-colors" in with_colors
+    assert "#1a1a2e,#e94560" in with_colors
+    without = pipeline._urlad_caption_args(_GOOD_FACTS)
+    assert without == ["--caption-coverage", "all"]

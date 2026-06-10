@@ -232,6 +232,8 @@ def stage_script(args: argparse.Namespace, idea_file: Path, paths: dict[str, Pat
     page_facts = paths.get("page_facts")
     if page_facts and Path(page_facts).exists():
         cmd += ["--page-facts-json", str(page_facts)]
+    if getattr(args, "style_direction", "").strip():
+        cmd += ["--style-direction", args.style_direction.strip()]
     run_stage("write_script", cmd)
     return paths["script"]
 
@@ -286,8 +288,14 @@ def stage_delogo(raw: Path, paths: dict[str, Path]) -> dict:
 
 # --- stage 6: narration ------------------------------------------------------
 
-def stage_narration(args: argparse.Namespace, delogo: Path, script: Path, paths: dict[str, Path]) -> dict:
-    """Run add_narration: Korean TTS + low BGM + selective captions (default on)."""
+def stage_narration(args: argparse.Namespace, delogo: Path, script: Path,
+                    paths: dict[str, Path],
+                    caption_args: list[str] | None = None) -> dict:
+    """Run add_narration: Korean TTS + low BGM + captions (default on).
+
+    ``caption_args`` lets a workflow tune the caption pass (url-ad sends
+    full coverage + brand accent colours).
+    """
     cmd = py("add_narration.py") + [
         "--in", str(delogo),
         "--out", str(paths["narrated_video"]),
@@ -303,6 +311,8 @@ def stage_narration(args: argparse.Namespace, delogo: Path, script: Path, paths:
         cmd.append("--allow-synth-bgm")
     if args.bgm:
         cmd += ["--bgm", str(Path(args.bgm).expanduser().resolve())]
+    if caption_args:
+        cmd += list(caption_args)
     return run_stage("add_narration", cmd)
 
 
@@ -393,6 +403,16 @@ def _urlad_idea_storyboard(page_facts: dict, paths: dict[str, Path]) -> Path:
         encoding="utf-8",
     )
     return idea_file
+
+
+def _urlad_caption_args(page_facts: dict) -> list[str]:
+    """url-ad caption tuning: caption EVERY sentence (sound-off viewers) and
+    accent with the brand colors captured from the page when present."""
+    extra = ["--caption-coverage", "all"]
+    colors = [str(c).strip() for c in (page_facts.get("brand_colors") or []) if str(c).strip()]
+    if colors:
+        extra += ["--brand-colors", ",".join(colors)]
+    return extra
 
 
 def _estimate_narration_seconds(script: Path) -> float:
@@ -513,6 +533,11 @@ def _add_core_args(parser: argparse.ArgumentParser) -> None:
         "--page-facts-json", default="",
         help="url-ad: reuse a supplied page_facts.json (skips the live ingest)",
     )
+    parser.add_argument(
+        "--style-direction", default="",
+        help="url-ad: routed creative direction (ad style family + dials from "
+             "references/ad-creative.md) passed to write_script",
+    )
     parser.add_argument("--topic", default="", help="synthesize ideas around this topic instead of scraping")
     parser.add_argument("--idea-index", type=int, default=0, help="0-based idea to use from the harvest")
     parser.add_argument("--scenes", type=int, default=6, help="storyboard scene count")
@@ -605,13 +630,17 @@ def run_pipeline_urlad(args: argparse.Namespace, paths: dict[str, Path]) -> dict
     stage_header(2, total, "write_script")
     script = stage_script(args, idea_file, paths)
     gate("write_script", lambda: stage_gates.gate_script(script))
+    # Ad-structure gate: hook window, Shorts duration budget, verbatim keys,
+    # captioned CTA. A weak script never reaches the render stages.
+    gate("ad_quality", lambda: stage_gates.gate_ad_quality(script))
 
     stage_header(3, total, "build_slideshow")
     raw = stage_visuals_slideshow(args, script, paths)
     gate("build_slideshow", lambda: stage_gates.gate_video(raw, label="slideshow"))
 
     stage_header(4, total, "add_narration")
-    narration = stage_narration(args, raw, script, paths)
+    narration = stage_narration(args, raw, script, paths,
+                                caption_args=_urlad_caption_args(page_facts))
     gate("add_narration", lambda: stage_gates.gate_narration(paths["narrated_video"]))
     final_video = paths["narrated_video"].resolve()
 

@@ -64,6 +64,11 @@ def parse_args() -> argparse.Namespace:
         help="url-ad: page_facts.json to ground the script in (hook->USP->CTA)",
     )
     parser.add_argument("--aspect-ratio", default="16:9", help="target aspect ratio (9:16 or 16:9)")
+    parser.add_argument(
+        "--style-direction", default="",
+        help="url-ad: routed creative direction (ad style family + dials from "
+             "references/ad-creative.md) injected into the codex prompt",
+    )
     parser.add_argument("--codex", default="codex", help="codex CLI command")
     return parser.parse_args()
 
@@ -134,15 +139,29 @@ def _grounding_block(page_facts: Any) -> str:
     return "\n".join(parts) + "\n"
 
 
+def _direction_block(style_direction: str) -> str:
+    """Creative-direction block for url-ad: the agent routes an ad style family
+    (references/ad-creative.md) and codex writes inside that direction."""
+    text = style_direction.strip()
+    if not text:
+        return ""
+    return (
+        "\n=== CREATIVE DIRECTION ===\n"
+        f"{text}\n"
+        "Write the narration INSIDE this direction (tone, structure, energy) "
+        "while still grounding every claim in the page facts.\n"
+    )
+
+
 def build_prompt(
     idea: Any, storyboard: Any, scenes: list[Any], lang: str, duration: int,
-    page_facts: Any = None, aspect_ratio: str = "16:9",
+    page_facts: Any = None, aspect_ratio: str = "16:9", style_direction: str = "",
 ) -> str:
     count = max(len(scenes), 1)
     target_seconds = duration * count
     idea_text = json.dumps(idea, ensure_ascii=False, indent=2)
     story_text = json.dumps(storyboard, ensure_ascii=False, indent=2)
-    grounding = _grounding_block(page_facts) if page_facts else ""
+    grounding = (_grounding_block(page_facts) if page_facts else "") + _direction_block(style_direction)
     return (
         "You are a YouTube short-form director and Korean copywriter.\n"
         "Given a video IDEA and a STORYBOARD, produce a production script as "
@@ -282,6 +301,7 @@ def main() -> int:
     prompt = build_prompt(
         idea, storyboard, scenes, args.lang, args.duration,
         page_facts=page_facts, aspect_ratio=args.aspect_ratio,
+        style_direction=args.style_direction,
     )
     raw = codex_text(args.codex, prompt)
     result = extract_json(raw)
