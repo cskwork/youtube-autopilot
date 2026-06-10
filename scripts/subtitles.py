@@ -70,8 +70,16 @@ def assemble_segments(sentences: list[str], wavs: list[str], durations: list[flo
 
 # --- key-sentence selection --------------------------------------------------
 
-def select_key_indices(sentences: list[str], key_sentences: list[str] | None, *, max_count: int) -> list[int]:
-    """Return indices of sentences to caption: verbatim key matches, else heuristic."""
+def select_key_indices(sentences: list[str], key_sentences: list[str] | None, *,
+                       max_count: int, coverage: str = "key") -> list[int]:
+    """Return indices of sentences to caption: verbatim key matches, else heuristic.
+
+    ``coverage="all"`` captions EVERY sentence (short-form ad mode, where
+    constant on-screen text carries sound-off viewers); ``max_count`` then does
+    not apply. The default ``"key"`` keeps the selective variety-show look.
+    """
+    if coverage == "all":
+        return list(range(len(sentences)))
     if key_sentences:
         matched = _match_verbatim(sentences, key_sentences)
         if matched:
@@ -80,13 +88,19 @@ def select_key_indices(sentences: list[str], key_sentences: list[str] | None, *,
 
 
 def _match_verbatim(sentences: list[str], key_sentences: list[str]) -> list[int]:
-    """Match each key sentence to a sentence index (whitespace-normalized)."""
+    """Match each key sentence to a sentence index (whitespace-normalized).
+
+    Containment counts: script models often trim lead-in words ("넷째,") from
+    a key sentence, so a key that is a substring of a sentence captions that
+    sentence rather than silently falling back to the heuristic."""
     norm = [_normalize_ws(s) for s in sentences]
     indices: list[int] = []
     for key in key_sentences:
         target = _normalize_ws(key)
+        if not target:
+            continue
         for i, candidate in enumerate(norm):
-            if candidate == target and i not in indices:
+            if target in candidate and i not in indices:
                 indices.append(i)
                 break
     return sorted(indices)
@@ -202,6 +216,41 @@ def _ass_color(rgb: tuple[int, int, int]) -> str:
     return f"&H{b:02X}{g:02X}{r:02X}&"
 
 
+def _hex_to_rgb(value: str) -> tuple[int, int, int] | None:
+    """Parse '#RRGGBB' (hash optional); None on anything else."""
+    s = value.strip().lstrip("#")
+    if len(s) != 6:
+        return None
+    try:
+        return int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
+    except ValueError:
+        return None
+
+
+# Accent colours darker than this relative luminance are unreadable over video
+# footage, so brand colours below it are skipped rather than burned in.
+_MIN_ACCENT_LUMA = 0.25
+
+
+def _accent_presets(brand_colors: list[str] | None) -> list[tuple[int, tuple[int, int, int]]]:
+    """Caption presets with brand accents when usable: the alignment rhythm is
+    kept, only the accent colours are swapped for legible brand colours. With
+    no usable colour (missing/invalid/too dark) the defaults stand."""
+    usable: list[tuple[int, int, int]] = []
+    for value in brand_colors or []:
+        rgb = _hex_to_rgb(str(value))
+        if rgb is None:
+            continue
+        r, g, b = rgb
+        if (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < _MIN_ACCENT_LUMA:
+            continue
+        usable.append(rgb)
+    if not usable:
+        return _CAPTION_PRESETS
+    return [(align, usable[i % len(usable)])
+            for i, (align, _default) in enumerate(_CAPTION_PRESETS)]
+
+
 def _norm_token(tok: str) -> str:
     """Token stripped of punctuation, for emphasis matching."""
     return "".join(ch for ch in tok if ch.isalnum())
@@ -254,20 +303,23 @@ def _style_caption(text: str, preset: tuple[int, tuple[int, int, int]],
 
 def build_ass(segments: list[Segment], key_idx: list[int],
               width: int = 1280, height: int = 720,
-              emphasis: list[str] | None = None) -> str:
+              emphasis: list[str] | None = None,
+              brand_colors: list[str] | None = None) -> str:
     """Render a styled, Korean-variety-show ASS for the key indices only.
 
     Pass the real video width/height so captions size to the frame (9:16 Shorts
     or 16:9). ``emphasis`` is an optional list of key terms to highlight; tokens
     containing one are accented/enlarged, else each caption pops its longest
     token. Captions cycle through `_CAPTION_PRESETS` so colour and position keep
-    changing. Defaults keep the historical 16:9 geometry.
+    changing; ``brand_colors`` ('#RRGGBB') swap in the brand's accent colours
+    when legible. Defaults keep the historical 16:9 geometry.
     """
+    presets = _accent_presets(brand_colors)
     base_font = _caption_metrics(width, height)["font"]
     lines = [_ass_header(width, height)]
     for n, idx in enumerate(key_idx):
         seg = segments[idx]
-        preset = _CAPTION_PRESETS[n % len(_CAPTION_PRESETS)]
+        preset = presets[n % len(presets)]
         styled = _style_caption(seg.text, preset, base_font, emphasis)
         lines.append(
             f"Dialogue: 0,{_ass_ts(seg.start)},{_ass_ts(seg.end)},Key,,0,0,0,,{styled}\n"

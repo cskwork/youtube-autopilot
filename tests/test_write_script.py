@@ -127,3 +127,19 @@ def test_build_prompt_grounded_minimal_facts() -> None:
     out = write_script.build_prompt(_IDEA, _STORYBOARD, _SCENES, "ko", 8, page_facts=facts)
     assert "only one" in out
     assert "Go" in out
+
+
+def test_build_prompt_style_direction_injected() -> None:
+    """A routed creative direction (references/ad-creative.md) reaches codex."""
+    out = write_script.build_prompt(
+        _IDEA, _STORYBOARD, _SCENES, "ko", 8, page_facts=_PAGE_FACTS,
+        style_direction="problem-solution: open on the pain, resolve with the product",
+    )
+    assert "CREATIVE DIRECTION" in out
+    assert "open on the pain" in out
+
+
+def test_build_prompt_no_style_direction_block_by_default() -> None:
+    out = write_script.build_prompt(
+        _IDEA, _STORYBOARD, _SCENES, "ko", 8, page_facts=_PAGE_FACTS)
+    assert "CREATIVE DIRECTION" not in out

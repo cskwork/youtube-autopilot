@@ -36,6 +36,15 @@ class GateError(Exception):
     """Raised when a stage's real output fails verification (hard stop)."""
 
 
+# Mirrors subtitles.py sentence segmentation so this module's caption checks
+# (verbatim key sentences, captioned CTA) predict what the caption stage sees.
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…。])\s+|\n+")
+_WS_RE = re.compile(r"\s+")
+# Korean speech pacing used to budget hook/total length WITHOUT running TTS
+# (same constant the orchestrator uses to size the slideshow).
+DEFAULT_CHARS_PER_SECOND = 5.5
+
+
 # --- ffprobe / ffmpeg probes -------------------------------------------------
 
 def _ffprobe(path: Path, entries: str, stream: str | None = None) -> str:
@@ -207,3 +216,60 @@ def gate_page_facts(path: Path, *, label: str = "ingest_url") -> dict:
     if not isinstance(props, list) or not props:
         raise GateError(f"{label}: need >= 1 value_props in {path}")
     return {"value_props": len(props), "url": data["url"].strip()}
+
+
+def _split_sentences(text: str) -> list[str]:
+    return [p.strip() for p in _SENTENCE_SPLIT_RE.split(text) if p and p.strip()]
+
+
+def _norm_ws(text: str) -> str:
+    return _WS_RE.sub(" ", text).strip()
+
+
+def gate_ad_quality(path: Path, *, chars_per_second: float = DEFAULT_CHARS_PER_SECOND,
+                    hook_max_s: float = 3.5, min_total_s: float = 12.0,
+                    max_total_s: float = 60.0, label: str = "ad_quality") -> dict:
+    """Assert the ad script lands the short-form conversion structure.
+
+    Deterministic proxies for the evidence-backed rules in
+    `references/workflows/url-ad.md`: the opening sentence must fit the ~3s
+    hook window, the whole narration must fit the Shorts budget, every key
+    sentence must match a narration sentence verbatim (else its caption slot
+    never fires), and the closing CTA sentence must be captioned. Speech time
+    is estimated from character count; no TTS runs here.
+    """
+    data = _load_json(path, label)
+    if not isinstance(data, dict):
+        raise GateError(f"{label}: script JSON must be an object: {path}")
+    sentences = _split_sentences(str(data.get("narration_ko") or ""))
+    if not sentences:
+        raise GateError(f"{label}: missing/empty narration_ko in {path}")
+    est_hook = len(sentences[0]) / chars_per_second
+    if est_hook > hook_max_s:
+        raise GateError(
+            f"{label}: opening sentence is ~{est_hook:.1f}s of speech, beyond the "
+            f"{hook_max_s:.1f}s hook window; front-load the value proposition"
+        )
+    est_total = sum(len(s) for s in sentences) / chars_per_second
+    if not (min_total_s <= est_total <= max_total_s):
+        raise GateError(
+            f"{label}: estimated narration duration {est_total:.1f}s outside the "
+            f"[{min_total_s:.0f}s, {max_total_s:.0f}s] short-form budget"
+        )
+    keys = data.get("key_sentences")
+    if not isinstance(keys, list) or not keys:
+        raise GateError(f"{label}: need >= 1 key_sentences (captioned hook/CTA) in {path}")
+    # Containment matching mirrors subtitles._match_verbatim: a key trimmed of
+    # lead-in words still captions its containing sentence.
+    norm_sentences = [_norm_ws(s) for s in sentences]
+    norm_keys = [_norm_ws(str(k)) for k in keys]
+    for key, norm_key in zip(keys, norm_keys):
+        if not norm_key or not any(norm_key in s for s in norm_sentences):
+            raise GateError(f"{label}: key sentence not verbatim in narration_ko: {key!r}")
+    if not any(norm_key in norm_sentences[-1] for norm_key in norm_keys):
+        raise GateError(
+            f"{label}: closing CTA sentence must be in key_sentences so it is "
+            f"captioned on screen: {sentences[-1]!r}"
+        )
+    return {"sentences": len(sentences), "key_sentences": len(keys),
+            "est_hook_s": round(est_hook, 2), "est_total_s": round(est_total, 2)}

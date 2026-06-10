@@ -28,24 +28,33 @@ def log(msg: str) -> None:
     sys.stderr.flush()
 
 
-def build_filter(w: int, h: int, dur: float, fps: int, reverse: bool) -> str:
+def build_filter(w: int, h: int, dur: float, fps: int, reverse: bool,
+                 src_aspect: float | None = None) -> str:
     """Blurred cover background + contained sharp foreground + subtle diagonal pan.
 
     The composed frame is built 8% larger than the canvas, then a constant WxH
     crop window travels linearly across that headroom over the clip duration,
     giving a calm Ken-Burns drift without ever cropping into the real UI.
+
+    ``src_aspect`` (source w/h) picks the fit axis: a source wider than the
+    canvas fits by WIDTH (height-fit would blow it past the frame), otherwise
+    by height. Unknown aspect keeps the historical height fit.
     """
     bw, bh = math.ceil(w * 1.08), math.ceil(h * 1.08)
     # t in [0,dur]; fraction f in [0,1]; reverse flips the travel direction.
     f = f"(t/{dur})" if not reverse else f"(1-(t/{dur}))"
     x_expr = f"(in_w-{w})*{f}"
     y_expr = f"(in_h-{h})*{f}"
+    # Foreground fits inside 94% of the canvas so side/letterbox bars are
+    # filled by the blurred bg and no real UI is clipped.
+    if src_aspect is not None and src_aspect > w / h:
+        fg_scale = f"scale={int(w*0.94)}:-2"
+    else:
+        fg_scale = f"scale=-2:{int(h*0.94)}"
     return (
         f"[0:v]scale={bw}:{bh}:force_original_aspect_ratio=increase,"
         f"crop={bw}:{bh},boxblur=26:3,eq=brightness=-0.18:saturation=1.08[bg];"
-        # Foreground fits inside 94% of the canvas so side/letterbox bars are
-        # filled by the blurred bg and no real UI is clipped.
-        f"[0:v]scale=-2:{int(h*0.94)}[fg];"
+        f"[0:v]{fg_scale}[fg];"
         f"[bg][fg]overlay=({bw}-w)/2:({bh}-h)/2[base];"
         f"[base]crop={w}:{h}:x='{x_expr}':y='{y_expr}',"
         f"fps={fps},format=yuv420p[v]"
@@ -70,7 +79,15 @@ def main() -> int:
     out = Path(args.out).expanduser().resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    vf = build_filter(args.width, args.height, args.duration, args.fps, args.reverse)
+    src_aspect = None
+    try:
+        from PIL import Image  # repo requirement (pillow); aspect drives the fit axis
+        with Image.open(img) as im:
+            src_aspect = im.width / im.height
+    except Exception:  # noqa: BLE001 - fit falls back to the historical height fit
+        log(f"could not read image size for {img}; using height fit")
+    vf = build_filter(args.width, args.height, args.duration, args.fps, args.reverse,
+                      src_aspect=src_aspect)
     cmd = [
         "ffmpeg", "-v", "error", "-y",
         "-loop", "1", "-t", f"{args.duration}", "-i", str(img),
