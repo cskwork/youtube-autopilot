@@ -1,6 +1,6 @@
 ---
 name: youtube-autopilot
-description: Intent-routed automated video-generation pipeline. Step 0 classifies the request into ONE of three workflows and loads its spec from references/workflows/, then composes shared building blocks to a finished video. (1) url-ad — "no recording, no editing, just paste a URL": ingest a website/landing/product page (Playwright scrape of Open Graph/meta + readable text + screenshots), ground a hook->USP->CTA script in the real page facts, show the captured page as faithful B-roll, and narrate it — the clickcast.tech category. (2) idea-video — the unattended "idea to private YouTube draft" flow that harvests the Studio inspiration feed (or a --topic), storyboards via codex, renders Gemini/Google Flow clips, delogos the watermark, narrates in Korean with Supertonic TTS, and uploads a PRIVATE draft. (3) product-ad — advertise an existing app/site whose real UI must appear faithfully (hybrid real-screen Ken-Burns + Flow B-roll), including a one-shot 30s vertical app commercial. Shared across workflows: Google Flow render (or slideshow fallback), per-sentence Supertonic narration, royalty-free ducked BGM, format-aware burned captions, gated fail-fast stages, and private-by-default upload. Use whenever the user wants a marketing/YouTube video made automatically — from a URL, an idea/topic, or an existing product.
+description: Makes a finished marketing or YouTube video automatically by routing the request to one of three workflows. Use when the user pastes a URL or a website, landing, or product page and wants it turned into a video, ad, or demo with no recording and no editing (url-ad). Use when the user wants an idea, a topic, or the YouTube Studio inspiration feed turned into a private YouTube draft, or wants to re-run one stage of that pipeline (idea-video). Use when the user wants to advertise an existing app, site, or product whose real UI must appear faithfully, including a one-shot 30-second vertical app commercial (product-ad).
 ---
 
 <overview>
@@ -8,13 +8,13 @@ youtube-autopilot makes a finished video automatically. It is intent-routed: the
 SAME building blocks (Flow render or slideshow, Supertonic narration, ducked
 royalty-free BGM, format-aware captions, gated stages, private-by-default upload)
 are composed by one of three workflows. Only the FRONT of the pipeline — what the
-video is made FROM — differs. Pick the workflow first, then follow its spec.
+video is made FROM — differs.
 </overview>
 
 <workflows>
 Step 0 — classify the request into ONE workflow, state it to the user in one
-line, then load its spec from `references/workflows/`. Do not inline a workflow's
-detail here; load the file.
+line, then read its spec from `references/workflows/` and work from that file
+before running any stage.
 
 | Signal in the request | Workflow | Load |
 |---|---|---|
@@ -127,19 +127,15 @@ per-gate `min_duration` / `min_bytes` args.
 </requirements>
 
 <important_constraints>
-- Fail-fast: every stage is gated (`<gates>`). The pipeline NEVER continues past
-  a failed stage — a failed video gen, silent narration, empty harvest, or
-  frameless storyboard hard-stops with `GATE FAILED after '<stage>'` and never
-  uploads. Designed fallbacks (synth BGM) are opt-in, not silent.
+- Fail-fast: a failed stage hard-stops with `GATE FAILED after '<stage>'` and
+  never uploads (`<gates>`).
 - Upload privacy defaults to `private`. The pipeline NEVER auto-publishes; the
   only human step is flipping the draft to public in YouTube Studio.
 - Each fresh Flow submit and each codex call may spend credits/tokens; prefer
   `--dry-run` to validate the chain before a real run.
-- Human approval gate (live runs): the browser stages run `npx @playwright/cli`,
-  an external package, and the attach/upload spends credits and is hard to
-  reverse, so an agent harness will (and should) require explicit user approval
-  before the live run. Grant a standing allow rule for the playwright CLI; do not
-  bypass the gate. See `<browser_attach>` point 6.
+- Human approval gate (live runs): a live run needs the operator's explicit
+  approval of the playwright CLI before any credit spend or upload; treat it as a
+  deliberate gate. Setup in `<browser_attach>` point 6.
 - Secrets (OAuth client secret, token) come only from CLI args / files; nothing
   is hardcoded. The uploader never prints token/secret contents.
 - Studio uses Shadow DOM + virtualized lists and Flow's DOM drifts; the scraper
@@ -181,7 +177,7 @@ Shared scripts:
 - `scripts/make_storyboard.py` — idea-video Stage 2: idea -> scene beats +
   storyboard PNGs.
 - `scripts/write_script.py` — Stage 3: Korean narration + Flow prompts + YouTube
-  metadata (will gain page-facts grounding for url-ad).
+  metadata; `--page-facts-json` grounds a url-ad script in the ingested facts.
 - `scripts/generate_video.py` — Stage 4: Flow render via `google_flow_cli.py`
   (call once per scene for a full-length video).
 - `scripts/assemble_flow_video.py` — concat scene clips + delogo + fit to
