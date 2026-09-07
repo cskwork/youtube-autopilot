@@ -139,5 +139,5 @@ reaches the next stage and never uploads. See `<gates>` in `SKILL.md`.
      the channel account differs from the GCP project account (the common case).
 
 The pipeline STOPS here. The ONLY remaining human step: open the private draft
-in YouTube Studio and flip it private -> public once reviewed.
+in YouTube Studio and verify it remains private. Public release is a separate user action.
 </process>
