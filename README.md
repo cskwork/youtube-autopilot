@@ -3,8 +3,7 @@
 **Idea to private YouTube draft, with one command.** An unattended pipeline that
 harvests a trending idea, storyboards it, renders motion clips with Google Flow,
 removes the watermark, narrates it in Korean, lays low-volume royalty-free music
-and burned-in captions under it, and uploads it as a **private** draft. The only
-human step left is flipping that draft to public.
+and burned-in captions under it, and uploads it as a **private** draft. Generation and upload run within the requested scope; public release is a separate user decision.
 
 ```
 Studio inspiration  ->  codex storyboard  ->  Google Flow video  ->  delogo
@@ -51,7 +50,7 @@ failed render or mux never carries forward or uploads.
 | 7 | Upload | `upload_youtube_studio.py` / `upload_youtube.py` | Upload as a **private** draft, either by driving the logged-in Studio browser (no OAuth) or via the YouTube Data API v3. |
 
 The pipeline **stops** after the upload. The only remaining human step is to open
-the private draft in YouTube Studio and flip it private -> public once reviewed.
+the private draft in YouTube Studio and verify that it remains private. Public release is separate.
 
 ## Quick start
 
@@ -206,23 +205,18 @@ fallbacks handle the common splits:
 ## Browser attach (the hard-won part)
 
 The browser stages (harvest, Flow video, Studio upload) drive **one** logged-in
-Chrome session via the Playwright agent CLI. Proven setup (Chrome 148, macOS):
+Chrome session via the Playwright agent CLI. Historical setup (Chrome 148, macOS); inspect current driver/browser capabilities before using it:
 
 1. Chrome 148 ignores `--remote-debugging-port` on the default profile. Enable it
    via the UI instead: open `chrome://inspect/#remote-debugging` and turn on
    "Allow remote debugging for this browser instance" (serves 127.0.0.1:9222).
 2. Attach once: `npx @playwright/cli@latest attach --cdp=chrome -s=vya`.
 3. Reuse that one session for every stage (`--session vya --no-attach`).
-4. **Always use the system npm cache** (empty `--npm-cache`). A custom cache
-   pulls a different CLI version whose daemon cannot see the attached session —
-   the #1 silent failure (scrapes return parse errors).
+4. Keep the package version and npm cache consistent across attach and commands; a changed cache can select a different CLI daemon.
 5. `run-code` runs `page => ...` in NODE context; DOM scraping must live inside
    `page.evaluate(() => {...})`.
 
-The live browser stages spend credits and are hard to reverse, so the agent
-harness is expected to gate the attach behind an explicit human approval — grant a
-standing allow for `npx @playwright/cli@latest *`, or approve each stage. Never
-work around the gate.
+Authorize the intended paid generation and upload actions for the task. Browser attachment itself is not proof of credit spend, and repeated CLI calls do not require repeated authorization for unchanged scope. Honor actual tool permission boundaries.
 
 ## CLI reference
 
@@ -270,7 +264,7 @@ python3 scripts/auto_youtube_pipeline.py --topic "테스트" --dry-run --allow-s
 cat <out-dir>/manifest.json
 ```
 
-After a real run, confirm the final MP4 before flipping the draft public:
+After a real run, confirm the final MP4 and verify any authorized upload remains private:
 
 ```bash
 ffprobe -v error -show_entries format=duration,size \
