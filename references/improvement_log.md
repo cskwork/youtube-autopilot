@@ -106,3 +106,5 @@ Planned improvements and known gaps.
 - [ ] Ask codex for multiple viral title variants and auto-pick the best.
 - [ ] Cache scraped ideas to avoid re-mining the same topics.
 - [ ] Capture and store per-stage timings to spot slow stages.
+
+- 2026-09-08 — Supersedes the 2026-06-03 blanket-permission advice: authorization is scoped to the requested generation/upload actions and persists across unchanged CLI invocations. A historical classifier denial is not a universal browser-stage requirement. Use current SKILL.md boundaries; do not request a standing wildcard permission.
