@@ -1,8 +1,7 @@
 # YouTube Autopilot — Runbook
 
 Operational guide for running the pipeline by hand and debugging each stage.
-The pipeline is fully automated up to one human gate: flipping the uploaded
-video from `private` to `public` in YouTube Studio.
+Within authorized generation/upload scope, the pipeline stops at a private draft. Public release is a separate user decision.
 
 Stages, in order:
 
@@ -172,11 +171,9 @@ First-time token bootstrap (interactive, run once):
 
 Debug checklist:
 
-- `invalid_grant` / expired refresh token: delete the token cache and re-run the
-  bootstrap.
+- `invalid_grant` / expired refresh token: inspect the auth failure and use the supported reauthorization flow. Replace an existing token cache only with authorization.
 - 403 `quotaExceeded`: the Data API daily quota is spent (a single upload costs
   ~1600 units). Wait for the quota reset or request more.
-- 401 / scope errors: the cached token lacks the upload scope. Delete the cache
+- 401 / scope errors: the cached token lacks the upload scope. Do not delete an existing token cache without authorization; inspect scopes and use the supported reauthorization flow. Replace the cache only when authorized
   and re-consent.
-- The uploaded video lands as **private**. The ONLY human step in the whole
-  workflow: open YouTube Studio and flip it `private -> public` once reviewed.
+- Authorized uploads land as **private**. Verification leaves the draft private; public release is a separate user decision.
